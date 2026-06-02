@@ -28,6 +28,7 @@ Fronter/
 npm install
 npm run dev
 npm run build
+npm run build:pages
 npm run preview
 npm run serve
 ```
@@ -37,6 +38,12 @@ npm run serve
 生产构建输出目录：`dist/`
 
 `npm run serve` 会读取 `dist/` 并提供 `/api/health-analysis`，适合构建后本地演示。
+
+GitHub Pages 静态构建使用 `npm run build:pages`，发布地址：
+
+`https://zack123chen.github.io/smartcollar/`
+
+注意：GitHub Pages 只托管静态前端，AI 健康分析的 DeepSeek 后端代理需要在本地 `npm run dev` 或 `npm run serve` 下运行。
 
 ## Local Storage
 

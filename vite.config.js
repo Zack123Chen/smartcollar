@@ -4,6 +4,7 @@ import { analyzePetHealth, loadLocalEnv, readJsonBody } from "./server/deepseek.
 loadLocalEnv();
 
 export default defineConfig({
+  base: process.env.GITHUB_PAGES === "true" ? "/smartcollar/" : "/",
   plugins: [
     {
       name: "careguard-health-api",
