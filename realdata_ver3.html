@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宠爱云护 CareGuard Live - 智能宠物项圈控制台 v4.0</title>
+    
+    <!-- 引入 Tailwind CSS 带来顶尖 UI 设计 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet 地图 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- MQTT 客户端 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <!-- Lucide 图标 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            background-color: #030712;
+            background-image: 
+                radial-gradient(circle at 50% 120%, #111827, #030712),
+                linear-gradient(rgba(18, 24, 38, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(18, 24, 38, 0.3) 1px, transparent 1px);
+            background-size: 100% 100%, 20px 20px, 20px 20px;
+        }
+
+        .sci-fi-glow {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+
+        .sci-fi-border {
+            position: relative;
+        }
+        .sci-fi-border::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-top: 2px solid #06b6d4;
+            border-left: 2px solid #06b6d4;
+        }
+        .sci-fi-border::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-bottom: 2px solid #06b6d4;
+            border-right: 2px solid #06b6d4;
+        }
+
+        /* 优雅的 Leaflet 地图暗色主题滤镜 */
+        .radar-map .leaflet-tile-container {
+            filter: invert(1) hue-rotate(180deg) brightness(0.6) contrast(1.4) saturate(1.2);
+        }
+        .radar-map {
+            background-color: #090d16 !important;
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+
+        .title-glow {
+            text-shadow: 0 0 15px rgba(6, 182, 212, 0.6), 0 0 2px rgba(6, 182, 212, 1);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        /* 扫描特效动画 */
+        @keyframes radar-scan {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+        .scanning-line {
+            animation: radar-scan 2s linear infinite;
+        }
+
+        .panel-sheen {
+            overflow: hidden;
+        }
+        .panel-sheen::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(115deg, transparent 0%, rgba(34, 211, 238, 0.08) 38%, transparent 58%);
+            transform: translateX(-120%);
+            animation: sheen-pass 8s ease-in-out infinite;
+        }
+        @keyframes sheen-pass {
+            0%, 55% { transform: translateX(-120%); }
+            78%, 100% { transform: translateX(120%); }
+        }
+
+        .metric-chip {
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.68));
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .topology-line {
+            background: linear-gradient(90deg, rgba(6, 182, 212, 0.16), rgba(16, 185, 129, 0.75), rgba(245, 158, 11, 0.2));
+        }
+
+        .leaflet-popup-content-wrapper,
+        .leaflet-popup-tip {
+            background: #020617 !important;
+            color: #e2e8f0 !important;
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+        }
+
+        @media (max-width: 640px) {
+            .mobile-tight-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen p-4 flex flex-col justify-between">
+
+    <!-- 主容器 -->
+    <div class="max-w-[1600px] w-full mx-auto space-y-4">
+        
+        <!-- 头部标题栏 -->
+        <header class="relative flex flex-col md:flex-row items-center justify-between p-4 bg-slate-900/60 backdrop-blur-md border border-cyan-500/20 rounded-lg sci-fi-border sci-fi-glow panel-sheen">
+            <div class="flex items-center gap-4">
+                <div class="relative flex items-center justify-center w-12 h-12 bg-cyan-950/40 rounded-lg border border-cyan-500/50">
+                    <i data-lucide="shield" class="w-6 h-6 text-cyan-400 animate-pulse"></i>
+                    <span class="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                    </span>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black tracking-widest text-cyan-400 title-glow flex items-center gap-2">
+                        CAREGUARD LIVE
+                    </h1>
+                    <p class="text-xs text-cyan-500/80 uppercase tracking-widest">宠爱云护 · 端云协同智能项圈实时监测平台 v4.0</p>
+                </div>
+            </div>
+            
+            <!-- 运行统计/基地参数 -->
+            <div class="flex flex-wrap gap-4 mt-3 md:mt-0 text-xs">
+                <div class="bg-slate-950/60 px-3 py-1.5 rounded border border-slate-800">
+                    <span class="text-slate-500">监测星历:</span>
+                    <span class="text-cyan-400 font-bold ml-1" id="starDate">SD-2026.05.19</span>
+                </div>
+                <div class="bg-slate-950/60 px-3 py-1.5 rounded border border-slate-800">
+                    <span class="text-slate-500">同步状态:</span>
+                    <span class="text-emerald-400 font-bold ml-1 flex items-center gap-1 inline-flex">
+                        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        ONLINE
+                    </span>
+                </div>
+                <div class="bg-slate-950/60 px-3 py-1.5 rounded border border-slate-800">
+                    <span class="text-slate-500">云端链路:</span>
+                    <span class="text-cyan-400 font-bold ml-1" id="secureChannelLabel">MQTT / SSL</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 项目价值指标栏 -->
+        <section class="grid grid-cols-2 xl:grid-cols-4 gap-3 mobile-tight-grid">
+            <div class="metric-chip rounded-lg p-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded border border-emerald-500/30 bg-emerald-950/30 flex items-center justify-center">
+                    <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-500 tracking-widest uppercase">PPG 稳定度</p>
+                    <p class="text-sm font-bold text-emerald-400">波动率降低 75%</p>
+                </div>
+            </div>
+            <div class="metric-chip rounded-lg p-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded border border-cyan-500/30 bg-cyan-950/30 flex items-center justify-center">
+                    <i data-lucide="satellite" class="w-4 h-4 text-cyan-400"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-500 tracking-widest uppercase">定位冷启动</p>
+                    <p class="text-sm font-bold text-cyan-400">TTFF 60s → 10s</p>
+                </div>
+            </div>
+            <div class="metric-chip rounded-lg p-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded border border-amber-500/30 bg-amber-950/30 flex items-center justify-center">
+                    <i data-lucide="battery-charging" class="w-4 h-4 text-amber-400"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-500 tracking-widest uppercase">ECO 续航</p>
+                    <p class="text-sm font-bold text-amber-400">3-5 天低功耗</p>
+                </div>
+            </div>
+            <div class="metric-chip rounded-lg p-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded border border-rose-500/30 bg-rose-950/30 flex items-center justify-center">
+                    <i data-lucide="radio-tower" class="w-4 h-4 text-rose-400"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-500 tracking-widest uppercase">数据架构</p>
+                    <p class="text-sm font-bold text-rose-300">感知·计算·传输解耦</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 核心生命指标监测区 -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 卡片 1：生命状态 -->
+            <div class="bg-slate-900/40 border border-slate-800 hover:border-cyan-500/30 p-4 rounded-lg flex items-center justify-between transition-all duration-300">
+                <div>
+                    <p class="text-xs text-slate-500 uppercase tracking-wider">当前活跃状态</p>
+                    <p class="text-lg md:text-2xl font-bold mt-1 text-cyan-400" id="kpiState">数据初始化中</p>
+                </div>
+                <div class="p-3 bg-cyan-950/30 border border-cyan-800/30 rounded-lg text-cyan-400">
+                    <i data-lucide="activity" class="w-6 h-6" id="stateIcon"></i>
+                </div>
+            </div>
+
+            <!-- 卡片 2：核心体温 -->
+            <div class="bg-slate-900/40 border border-slate-800 hover:border-amber-500/30 p-4 rounded-lg flex items-center justify-between transition-all duration-300">
+                <div>
+                    <p class="text-xs text-slate-500 uppercase tracking-wider">宠物核心体温</p>
+                    <p class="text-lg md:text-2xl font-bold mt-1 text-amber-400" id="kpiTemp">38.5 °C</p>
+                </div>
+                <div class="p-3 bg-amber-950/30 border border-amber-800/30 rounded-lg text-amber-400">
+                    <i data-lucide="thermometer" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <!-- 卡片 3：累计运动里程 -->
+            <div class="bg-slate-900/40 border border-slate-800 hover:border-emerald-500/30 p-4 rounded-lg flex items-center justify-between transition-all duration-300">
+                <div>
+                    <p class="text-xs text-slate-500 uppercase tracking-wider">今日累计里程</p>
+                    <p class="text-lg md:text-2xl font-bold mt-1 text-emerald-400" id="kpiDistance">0.00 米</p>
+                </div>
+                <div class="p-3 bg-emerald-950/30 border border-emerald-800/30 rounded-lg text-emerald-400">
+                    <i data-lucide="navigation-2" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <!-- 卡片 4：项圈电量 -->
+            <div class="bg-slate-900/40 border border-slate-800 hover:border-pink-500/30 p-4 rounded-lg flex items-center justify-between transition-all duration-300">
+                <div>
+                    <p class="text-xs text-slate-500 uppercase tracking-wider">硬件设备电量</p>
+                    <p class="text-lg md:text-2xl font-bold mt-1 text-pink-400" id="kpiBattery">100 %</p>
+                </div>
+                <div class="p-3 bg-pink-950/30 border border-pink-800/30 rounded-lg text-pink-400">
+                    <i data-lucide="battery" class="w-6 h-6" id="batteryIcon"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- 左右分屏核心工作区 -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- 左侧控制面板与生命 analysis (5/12) -->
+            <section class="lg:col-span-5 flex flex-col gap-4">
+                
+                <!-- 生物多维遥测图表 (心率+体温双轨迹) -->
+                <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex flex-col h-[320px] sci-fi-border relative">
+                    <div class="flex items-center justify-between mb-2 border-b border-slate-800 pb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="heart-pulse" class="w-4 h-4 text-cyan-400"></i>
+                            <h3 class="text-sm font-bold text-slate-300 tracking-wider">动态生命体征监测图谱</h3>
+                        </div>
+                        <span class="text-[10px] text-cyan-500 bg-cyan-950/60 border border-cyan-800/30 px-2 py-0.5 rounded">实时遥测波形</span>
+                    </div>
+                    <div class="flex-1 relative">
+                        <canvas id="telemetryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 远程安抚与召回控制台 -->
+                <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex flex-col sci-fi-border">
+                    <div class="flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
+                        <i data-lucide="wifi" class="w-4 h-4 text-cyan-400"></i>
+                        <h3 class="text-sm font-bold text-slate-300 tracking-wider">远程安抚与召回控制台</h3>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="sendCommand('BEEP', '发送远程召回蜂鸣声音频信号')" class="group flex flex-col items-center justify-center p-3 rounded-lg border border-cyan-800/40 bg-cyan-950/10 hover:bg-cyan-900/20 hover:border-cyan-500/80 transition-all">
+                            <i data-lucide="bell-ring" class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-[11px] mt-1 text-slate-400">召回哨音</span>
+                        </button>
+                        <button onclick="sendCommand('LIGHT_ON', '开启项圈LED夜间寻宠高亮指示灯')" class="group flex flex-col items-center justify-center p-3 rounded-lg border border-amber-800/40 bg-amber-950/10 hover:bg-amber-900/20 hover:border-amber-500/80 transition-all">
+                            <i data-lucide="eye" class="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-[11px] mt-1 text-slate-400">寻宠闪光</span>
+                        </button>
+                        <button onclick="sendCommand('ECO_MODE', '切换项圈至智能低功耗省电采集模式')" class="group flex flex-col items-center justify-center p-3 rounded-lg border border-emerald-800/40 bg-emerald-950/10 hover:bg-emerald-900/20 hover:border-emerald-500/80 transition-all">
+                            <i data-lucide="battery-charging" class="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-[11px] mt-1 text-slate-400">智能省电</span>
+                        </button>
+                    </div>
+
+                    <!-- 操作执行日志 system -->
+                    <div class="mt-3 flex flex-col flex-1">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] text-slate-500">设备控制与系统反馈日志：</span>
+                            <button onclick="archiveCurrentSession()" class="text-[10px] text-cyan-400 border border-cyan-800/60 bg-cyan-950/40 hover:bg-cyan-900/40 px-2 py-0.5 rounded transition-all inline-flex items-center gap-1">
+                                <i data-lucide="archive" class="w-3 h-3"></i> 归档当前轨迹
+                            </button>
+                        </div>
+                        <div id="actionLog" class="h-[80px] bg-slate-950/80 rounded border border-slate-800/80 p-2 text-[11px] overflow-y-auto font-mono text-cyan-500/90 leading-relaxed">
+                            [11:34:59] 智能守护控制台系统载入成功...<br>
+                            [11:35:00] 传感器网格同步校验完毕...
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- 右侧定位雷达与模拟器 (7/12) -->
+            <section class="lg:col-span-7 flex flex-col gap-4">
+                
+                <!-- 高精度定位雷达地图 -->
+                <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex flex-col h-[320px] md:h-[400px] sci-fi-border relative">
+                    <div class="flex items-center justify-between mb-2 border-b border-slate-800 pb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i>
+                            <h3 class="text-sm font-bold text-slate-300 tracking-wider">高精度地理定位与寻宠雷达</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearHistoryPath()" class="text-[10px] text-rose-400 bg-rose-950/40 border border-rose-900/50 hover:bg-rose-900/70 px-2 py-0.5 rounded transition-all">
+                                清除运动轨迹
+                            </button>
+                            <span class="text-[10px] text-slate-400 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded">监测锚点：哈工大</span>
+                        </div>
+                    </div>
+                    <div id="map" class="flex-1 rounded border border-cyan-900/40 radar-map"></div>
+                </div>
+
+                <!-- 硬件数据流仿真器 -->
+                <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg flex flex-col sci-fi-border">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 border-b border-slate-800 pb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="cpu" class="w-4 h-4 text-amber-500"></i>
+                            <h3 class="text-sm font-bold text-slate-300 tracking-wider">智能项圈健康遥测仿真器</h3>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <!-- 模式切换按键：完美融入 UI，展现高科质感 -->
+                            <button id="modeToggleBtn" onclick="toggleSystemMode()" class="text-[10px] font-bold px-2.5 py-1 rounded border border-cyan-500/50 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/40 transition-all flex items-center gap-1.5" title="点击在真实硬装监听与本地虚拟仿真演示之间切换">
+                                <i id="modeToggleIcon" data-lucide="radio" class="w-3.5 h-3.5 text-cyan-400 animate-pulse"></i> 
+                                <span id="modeToggleText">当前模式: 真实硬件</span>
+                            </button>
+                            <span id="simulatorStatus" class="flex items-center gap-1.5 text-xs text-slate-500">
+                                <span class="h-2 w-2 rounded-full bg-slate-500"></span>
+                                SIMULATOR STANDBY
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button onclick="triggerSimulatedScenario('REST')" class="py-2 px-3 rounded text-xs border border-slate-700 bg-slate-800/40 hover:bg-slate-700/60 text-slate-300 font-bold transition-all inline-flex items-center justify-center gap-1.5">
+                            <i data-lucide="moon" class="w-3.5 h-3.5"></i> 熟睡模式
+                        </button>
+                        <button onclick="triggerSimulatedScenario('PATROL')" class="py-2 px-3 rounded text-xs border border-emerald-800/40 bg-emerald-950/20 hover:bg-emerald-900/30 text-emerald-400 font-bold transition-all inline-flex items-center justify-center gap-1.5">
+                            <i data-lucide="footprints" class="w-3.5 h-3.5"></i> 日常慢步
+                        </button>
+                        <button onclick="triggerSimulatedScenario('CHARGE')" class="py-2 px-3 rounded text-xs border border-cyan-800/40 bg-cyan-950/20 hover:bg-cyan-900/30 text-cyan-400 font-bold transition-all inline-flex items-center justify-center gap-1.5">
+                            <i data-lucide="flame" class="w-3.5 h-3.5"></i> 快速奔跑
+                        </button>
+                        <button onclick="triggerSimulatedScenario('ALARM_FEVER')" class="py-2 px-3 rounded text-xs border border-rose-800/40 bg-rose-950/20 hover:bg-rose-900/30 text-rose-400 font-bold transition-all inline-flex items-center justify-center gap-1.5">
+                            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> 异常体温预警
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+
+        <!-- 底层信息板：历史运动档案库 + AI健康评估与调理建议 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- 历史运动与体征档案 (6/12) -->
+            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg lg:col-span-6 flex flex-col sci-fi-border relative">
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="folder-heart" class="w-4 h-4 text-cyan-400"></i>
+                        <h3 class="text-sm font-bold text-slate-300 tracking-wider">历史运动与体征档案</h3>
+                    </div>
+                    <span class="text-[10px] text-cyan-500">点击档案一键复盘重绘</span>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-400 font-mono">
+                        <thead class="bg-slate-950/80 text-cyan-400 border-b border-slate-800">
+                            <tr>
+                                <th class="p-2">档案名称/活动场景</th>
+                                <th class="p-2">平均心率</th>
+                                <th class="p-2">最高体温</th>
+                                <th class="p-2">总路程</th>
+                                <th class="p-2">回放</th>
+                            </tr>
+                        </thead>
+                        <tbody id="missionArchiveTableBody" class="divide-y divide-slate-800/60">
+                            <!-- 预置历史模拟数据 -->
+                            <tr class="hover:bg-slate-800/30 transition-colors cursor-pointer" onclick="loadArchivedMission(0)">
+                                <td class="p-2 text-cyan-300">#01-晨间草坪快跑(一校区)</td>
+                                <td class="p-2">124 BPM</td>
+                                <td class="p-2">39.2 °C</td>
+                                <td class="p-2">842.10 米</td>
+                                <td class="p-2 text-cyan-400 hover:underline">载入</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30 transition-colors cursor-pointer" onclick="loadArchivedMission(1)">
+                                <td class="p-2 text-emerald-400">#02-图书馆周边慢行散步</td>
+                                <td class="p-2">82 BPM</td>
+                                <td class="p-2">38.4 °C</td>
+                                <td class="p-2">350.50 米</td>
+                                <td class="p-2 text-emerald-400 hover:underline">载入</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AI 智能健康评估与调理建议 (6/12) -->
+            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg lg:col-span-6 flex flex-col sci-fi-border relative overflow-hidden">
+                <!-- 遮罩全息体检扫描层 -->
+                <div id="scanOverlay" class="hidden absolute inset-0 bg-cyan-950/20 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center">
+                    <div class="w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent absolute top-0 scanning-line"></div>
+                    <div class="flex flex-col items-center gap-2">
+                        <i data-lucide="scan-face" class="w-10 h-10 text-cyan-400 animate-pulse"></i>
+                        <span class="text-xs text-cyan-400 tracking-widest font-bold animate-pulse" id="scanText">AI HEALTH CHECK: 生命体征全谱扫描中 0%</span>
+                        <div class="w-48 bg-slate-950 rounded-full h-1.5 border border-cyan-800/40">
+                            <div class="bg-cyan-400 h-full rounded-full w-0 transition-all duration-300" id="scanProgress"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="heart-handshake" class="w-4 h-4 text-amber-500"></i>
+                        <h3 class="text-sm font-bold text-slate-300 tracking-wider">AI 智能健康评估与调理建议</h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <!-- 已弱化并重塑的保险保障入口，完美契合应用高阶增值闭环，不再干扰核心控制界面 -->
+                        <button onclick="sendCommand('INSURANCE_SIGN', '用户申请智能守护联合健康保障协议')" class="text-[10px] text-cyan-400 border border-cyan-800/50 hover:border-cyan-500 bg-cyan-950/20 px-2 py-0.5 rounded transition-all flex items-center gap-1" title="联合中国平安提供宠物健康与第三者责任医疗保障支持">
+                            <i data-lucide="shield-check" class="w-3 h-3 text-cyan-400"></i> 平安联合保障计划
+                        </button>
+                        <button onclick="startBioScan()" class="text-[10px] text-amber-400 border border-amber-800/60 bg-amber-950/40 hover:bg-amber-900/40 px-3 py-1 rounded transition-all flex items-center gap-1">
+                            <i data-lucide="sparkles" class="w-3 h-3"></i> 一键体检
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 动态体检诊断结论输出 -->
+                <div class="flex-1 space-y-3 text-xs leading-relaxed" id="diagnosticReport">
+                    <div class="p-3 bg-slate-950/40 border border-slate-800 rounded-lg">
+                        <h4 class="font-bold text-cyan-400 mb-1 flex items-center gap-1" id="reportHeadline">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                            生理机能健康度评估: 慢行适中
+                        </h4>
+                        <p class="text-slate-300" id="reportConclusion">
+                            心率和核心温度处于健康基准线，日常自主运动水平正常。
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-950/60 p-2.5 rounded border border-slate-800">
+                            <span class="text-cyan-400 font-bold block mb-1">科学活动建议：</span>
+                            <span class="text-slate-400 text-[11px]" id="sportAdvice">当前阶段心肺适应度极佳，可维持适度的户外互动或敏捷抛掷小训练。</span>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded border border-slate-800">
+                            <span class="text-amber-400 font-bold block mb-1">膳食调理处方：</span>
+                            <span class="text-slate-400 text-[11px]" id="dietAdvice">建议定时补充清洁温水。膳食配方建议加入适量维生素，辅助提升环境免疫抵抗力。</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 端云网架构与创新验证看板 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg lg:col-span-7 sci-fi-border relative">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="network" class="w-4 h-4 text-emerald-400"></i>
+                        <h3 class="text-sm font-bold text-slate-300 tracking-wider">端云网协同链路</h3>
+                    </div>
+                    <span class="text-[10px] text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 px-2 py-0.5 rounded">100ms → 200ms → 1s</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 relative">
+                    <div class="hidden md:block absolute left-[16%] right-[16%] top-9 h-px topology-line"></div>
+                    <div class="relative z-10 bg-slate-950/60 border border-cyan-900/40 rounded-lg p-3">
+                        <div class="w-10 h-10 rounded border border-cyan-500/40 bg-cyan-950/30 flex items-center justify-center mb-3">
+                            <i data-lucide="scan-heart" class="w-5 h-5 text-cyan-400"></i>
+                        </div>
+                        <p class="text-xs text-cyan-300 font-bold tracking-wider">感知层</p>
+                        <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">PPG、体温、MPU6050 与 GPS 同步采集，底层 100ms 周期刷新。</p>
+                    </div>
+                    <div class="relative z-10 bg-slate-950/60 border border-emerald-900/40 rounded-lg p-3">
+                        <div class="w-10 h-10 rounded border border-emerald-500/40 bg-emerald-950/30 flex items-center justify-center mb-3">
+                            <i data-lucide="brain-circuit" class="w-5 h-5 text-emerald-400"></i>
+                        </div>
+                        <p class="text-xs text-emerald-300 font-bold tracking-wider">边缘计算层</p>
+                        <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">自适应卡尔曼滤波、姿态判别与 ECO/ACT 功耗状态机本地闭环。</p>
+                    </div>
+                    <div class="relative z-10 bg-slate-950/60 border border-amber-900/40 rounded-lg p-3">
+                        <div class="w-10 h-10 rounded border border-amber-500/40 bg-amber-950/30 flex items-center justify-center mb-3">
+                            <i data-lucide="cloud-cog" class="w-5 h-5 text-amber-400"></i>
+                        </div>
+                        <p class="text-xs text-amber-300 font-bold tracking-wider">云端展示层</p>
+                        <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">EC800K 通过 MQTT 上报 EMQX，大屏负责寻宠、预警、复盘与远程控制。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 p-4 rounded-lg lg:col-span-5 sci-fi-border relative">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="target" class="w-4 h-4 text-rose-400"></i>
+                        <h3 class="text-sm font-bold text-slate-300 tracking-wider">三大痛点验证</h3>
+                    </div>
+                    <span class="text-[10px] text-rose-300 bg-rose-950/30 border border-rose-900/40 px-2 py-0.5 rounded">校赛展示版</span>
+                </div>
+                <div class="space-y-2">
+                    <div class="bg-slate-950/60 border border-slate-800 rounded p-3 flex items-start gap-3">
+                        <i data-lucide="activity" class="w-4 h-4 text-emerald-400 mt-0.5"></i>
+                        <div>
+                            <p class="text-xs font-bold text-emerald-300">测得准</p>
+                            <p class="text-[11px] text-slate-400">运动模长动态调节噪声协方差，过滤跑跳导致的 PPG 伪影。</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-950/60 border border-slate-800 rounded p-3 flex items-start gap-3">
+                        <i data-lucide="map-pinned" class="w-4 h-4 text-cyan-400 mt-0.5"></i>
+                        <div>
+                            <p class="text-xs font-bold text-cyan-300">追得到</p>
+                            <p class="text-[11px] text-slate-400">A-GPS 与 LBS 冗余，降低首次定位时间，复杂环境不轻易丢点。</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-950/60 border border-slate-800 rounded p-3 flex items-start gap-3">
+                        <i data-lucide="leaf" class="w-4 h-4 text-amber-400 mt-0.5"></i>
+                        <div>
+                            <p class="text-xs font-bold text-amber-300">续得久</p>
+                            <p class="text-[11px] text-slate-400">异常才上报、静止低频采集，减少 4G 传输导致的功耗浪费。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 底部全局同步监控器 -->
+        <footer class="relative flex flex-col md:flex-row items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs">
+            <div class="flex items-center gap-2">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span id="statusIndicator" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span id="statusBar" class="text-slate-400 font-mono">物联网云端接收就绪，等待监听中...</span>
+            </div>
+            <div class="mt-2 md:mt-0 text-slate-500 flex items-center gap-4">
+                <span id="nodeLabel">卫星中继基站: broker-cn.emqx.io</span>
+                <span>数据信箱: HIT/PetData</span>
+                <span>核心项目组: HIT 宠知科技</span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- 自定义通知弹窗 -->
+    <div id="customToast" class="fixed bottom-6 right-6 z-[9999] p-4 bg-slate-900/95 border-l-4 border-cyan-500 rounded shadow-2xl translate-y-20 opacity-0 transition-all duration-300 flex items-start gap-3 max-w-sm">
+        <div id="toastIcon" class="p-1.5 rounded bg-cyan-950 border border-cyan-800/40 text-cyan-400">
+            <i data-lucide="info" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <h4 id="toastTitle" class="font-bold text-sm text-slate-200">系统通知</h4>
+            <p id="toastMessage" class="text-xs text-slate-400 mt-1">通知内容。</p>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 模块 1：变量声明与初始化
+        // ==========================================
+        let previousPosition = null;
+        let cumulativeDistance = 0; // 累计运动里程
+        let routeCoordinates = [];   // 运动轨迹记录
+        let routePolyline = null;    // 轨迹图层
+        let isDemoMode = false;      // 默认处于“真实模式”(不干扰物理单片机信号)
+
+        // 历史档案物理存储 (包含轨迹)
+        let archivedMissions = [
+            {
+                name: "晨间草坪快跑(一校区)",
+                avgHr: 124,
+                maxTemp: 39.2,
+                distance: 842.10,
+                path: [
+                    [45.751167, 126.629339],
+                    [45.751600, 126.629900],
+                    [45.752200, 126.631000],
+                    [45.752500, 126.632200],
+                    [45.751800, 126.632500],
+                    [45.751100, 126.631200],
+                    [45.751167, 126.629339]
+                ]
+            },
+            {
+                name: "图书馆周边慢行散步",
+                avgHr: 82,
+                maxTemp: 38.4,
+                distance: 350.50,
+                path: [
+                    [45.751167, 126.629339],
+                    [45.750800, 126.628800],
+                    [45.750200, 126.628500],
+                    [45.750500, 126.629900],
+                    [45.751167, 126.629339]
+                ]
+            }
+        ];
+
+        // 统一图标初始化
+        lucide.createIcons();
+
+        // 实时更新当前星历时间
+        function updateStarDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            document.getElementById('starDate').innerText = `SD-${year}.${month}.${day}`;
+        }
+        updateStarDate();
+
+        // ==========================================
+        // 模块 1.5：系统模式切换引擎 (真实 vs 演示)
+        // ==========================================
+        function toggleSystemMode() {
+            const btn = document.getElementById('modeToggleBtn');
+            const icon = document.getElementById('modeToggleIcon');
+            const text = document.getElementById('modeToggleText');
+
+            isDemoMode = !isDemoMode;
+
+            if (isDemoMode) {
+                // 进入演示模式：高亮橙黄色
+                btn.className = "text-[10px] font-bold px-2.5 py-1 rounded border border-amber-500/50 bg-amber-950/30 text-amber-400 hover:bg-amber-900/40 transition-all flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)]";
+                icon.className = "w-3.5 h-3.5 text-amber-400 animate-spin";
+                icon.setAttribute('data-lucide', 'cpu');
+                text.innerText = "当前模式: 仿真演示";
+
+                logAction("系统", "已成功切入【仿真演示模式】。点击下方场景按钮触发遥测运动。");
+                showToast("系统模式切换", "演示模式已激活。点击场景按钮即可启动虚拟数据源！", "info");
+
+                // 默认启动日常慢步仿真，以便用户有即时视觉体验
+                triggerSimulatedScenario('PATROL');
+            } else {
+                // 恢复真实模式：亮丽青色
+                stopSimulator();
+                btn.className = "text-[10px] font-bold px-2.5 py-1 rounded border border-cyan-500/50 bg-cyan-950/30 text-cyan-400 hover:bg-cyan-900/40 transition-all flex items-center gap-1.5";
+                icon.className = "w-3.5 h-3.5 text-cyan-400 animate-pulse";
+                icon.setAttribute('data-lucide', 'radio');
+                text.innerText = "当前模式: 真实硬件";
+
+                logAction("系统", "已切换回【真实硬件模式】。控制台已切断仿真回路，纯净等待物理单片机报文。");
+                showToast("系统模式切换", "已切入物理硬件直连。控制台开始全面监听物理项圈上报！", "success");
+            }
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // 模块 2：初始化“高精度寻宠地图”
+        // ==========================================
+        // 初始化中心点设在哈尔滨工业大学一校区
+        const hitCoords = [45.751167, 126.629339];
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView(hitCoords, 16);
+        
+        // 加载 OpenStreetMap 开源瓦片地图
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // 自定义高科技呼吸光圈 Marker
+        const pulseIcon = L.divIcon({
+            className: 'relative flex items-center justify-center',
+            html: `
+                <div class="absolute w-12 h-12 bg-cyan-500/20 rounded-full animate-ping"></div>
+                <div class="absolute w-6 h-6 bg-cyan-500/30 rounded-full"></div>
+                <div class="w-3.5 h-3.5 bg-cyan-400 rounded-full border-2 border-white shadow-[0_0_8px_#22d3ee]"></div>
+            `,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+
+        // 定位标记
+        const petMarker = L.marker(hitCoords, { icon: pulseIcon }).addTo(map);
+        petMarker.bindPopup(`
+            <div class="bg-slate-950 text-slate-100 p-2 rounded border border-cyan-500/30 text-xs font-mono">
+                <b class="text-cyan-400">爱宠芯片: K9-小七</b><br>
+                状态: 等待硬件接入...<br>
+                项圈GPS: 卫星握手正常
+            </div>
+        `).openPopup();
+
+        // ==========================================
+        // 模块 3：初始化生命指标监测图表
+        // ==========================================
+        const chartCtx = document.getElementById('telemetryChart').getContext('2d');
+        
+        // 创建漂亮的渐变色
+        const hrGradient = chartCtx.createLinearGradient(0, 0, 0, 250);
+        hrGradient.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
+        hrGradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+
+        const tempGradient = chartCtx.createLinearGradient(0, 0, 0, 250);
+        tempGradient.addColorStop(0, 'rgba(245, 158, 11, 0.3)');
+        tempGradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+
+        const telemetryChart = new Chart(chartCtx, {
+            type: 'line',
+            data: {
+                labels: [], // 时间戳
+                datasets: [
+                    {
+                        label: '实时心率 (BPM)',
+                        yAxisID: 'y-hr',
+                        borderColor: '#06b6d4',
+                        backgroundColor: hrGradient,
+                        data: [],
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 2.5,
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#22d3ee'
+                    },
+                    {
+                        label: '实时体温 (°C)',
+                        yAxisID: 'y-temp',
+                        borderColor: '#f59e0b',
+                        backgroundColor: tempGradient,
+                        data: [],
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        borderDash: [5, 5]
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    'y-hr': {
+                        type: 'linear',
+                        position: 'left',
+                        min: 0,
+                        max: 180,
+                        grid: { color: '#1e293b/40' },
+                        ticks: { color: '#94a3b8', font: { family: 'Share Tech Mono' } },
+                        title: { display: true, text: '心率 (BPM)', color: '#06b6d4' }
+                    },
+                    'y-temp': {
+                        type: 'linear',
+                        position: 'right',
+                        min: 35,
+                        max: 43,
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#94a3b8', font: { family: 'Share Tech Mono' } },
+                        title: { display: true, text: '体温 (°C)', color: '#f59e0b' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#64748b', font: { family: 'Share Tech Mono' } }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: '#94a3b8', font: { family: 'Share Tech Mono', size: 10 } }
+                    }
+                },
+                animation: { duration: 200 }
+            }
+        });
+
+        // ==========================================
+        // 模块 4：哈弗辛距离算法 (计算累计轨迹长度)
+        // ==========================================
+        function computeDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // 地球半径，单位：米
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // 米
+        }
+
+        // 清空历史运动轨迹
+        function clearHistoryPath() {
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+            routeCoordinates = [];
+            cumulativeDistance = 0;
+            previousPosition = null;
+            document.getElementById('kpiDistance').innerText = `0.00 米`;
+            logAction("操作", "历史运动轨迹图层已成功清洗。");
+            showToast("轨迹重置", "已清除地图上所有轨迹折线", "info");
+        }
+
+        // ==========================================
+        // 模块 5：核心数据解包与状态渲染引擎
+        // ==========================================
+        function processIncomingTelemetry(payload) {
+            try {
+                // 状态机判定 (支持物理单片机的英文状态)
+                const state = payload.state || "Active";
+                
+                // 修复逻辑：使用 isNaN 判定代替逻辑或(||)，防止 0 被误判为 falsy 值从而被默认值覆盖
+                const parsedHr = parseInt(payload.hr);
+                const hr = isNaN(parsedHr) ? 80 : parsedHr;
+                
+                const parsedTemp = parseFloat(payload.temp);
+                const temp = isNaN(parsedTemp) ? 38.5 : parsedTemp;
+                
+                const lat = parseFloat(payload.lat);
+                const lng = parseFloat(payload.lng);
+                
+                const parsedBattery = parseInt(payload.battery);
+                const battery = isNaN(parsedBattery) ? 100 : parsedBattery;
+
+                // 更新 KPI 卡片
+                updateKPIs(state, hr, temp, battery);
+
+                // 更新历史折线轨迹与距离计算
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    const currentPos = new L.LatLng(lat, lng);
+                    
+                    if (previousPosition) {
+                        const segmentDist = computeDistance(previousPosition.lat, previousPosition.lng, lat, lng);
+                        if (segmentDist > 0.5 && segmentDist < 500) {
+                            cumulativeDistance += segmentDist;
+                            document.getElementById('kpiDistance').innerText = `${cumulativeDistance.toFixed(2)} 米`;
+                        }
+                    }
+                    previousPosition = currentPos;
+                    
+                    // 记录轨迹并绘制
+                    routeCoordinates.push(currentPos);
+                    if (routeCoordinates.length > 200) routeCoordinates.shift(); 
+
+                    if (routePolyline) {
+                        routePolyline.setLatLngs(routeCoordinates);
+                    } else {
+                        routePolyline = L.polyline(routeCoordinates, {
+                            color: '#06b6d4',
+                            weight: 3,
+                            opacity: 0.8,
+                            dashArray: '5, 8'
+                        }).addTo(map);
+                    }
+
+                    // 平滑移动定位点
+                    petMarker.setLatLng(currentPos);
+                    
+                    // 当宠物快速奔跑或体温异常或日常走动时，镜头自动聚焦
+                    if (state === "快速奔跑" || state === "突击" || state === "异常体温预警" || state === "Running" || state === "Walking" || state === "日常慢步" || state === "奔跑") {
+                        map.panTo(currentPos);
+                    }
+
+                    // 更新标记弹出卡片信息
+                    petMarker.setPopupContent(`
+                        <div class="bg-slate-950 text-slate-100 p-2 rounded border border-cyan-500/30 text-xs font-mono">
+                            <b class="text-cyan-400">生命体征: 小七 K9</b><br>
+                            活跃姿态: ${state}<br>
+                            心跳频率: ${hr} BPM<br>
+                            核心体温: ${temp} °C
+                        </div>
+                    `);
+                }
+
+                // 推进生命指标分析波形图
+                const now = new Date();
+                const timeLabel = String(now.getHours()).padStart(2, '0') + ":" + 
+                                  String(now.getMinutes()).padStart(2, '0') + ":" + 
+                                  String(now.getSeconds()).padStart(2, '0');
+                
+                telemetryChart.data.labels.push(timeLabel);
+                telemetryChart.data.datasets[0].data.push(hr);
+                telemetryChart.data.datasets[1].data.push(temp);
+
+                if (telemetryChart.data.labels.length > 25) {
+                    telemetryChart.data.labels.shift();
+                    telemetryChart.data.datasets[0].data.shift();
+                    telemetryChart.data.datasets[1].data.shift();
+                }
+                telemetryChart.update();
+
+                // 状态栏与警报提示
+                const statusEl = document.getElementById('statusBar');
+                const statusText = `生命体征: ${state} | 心率: ${hr} BPM | 温度: ${temp} °C | GPS: [${lng.toFixed(5)}, ${lat.toFixed(5)}]`;
+                
+                if (temp > 40.0 || (hr > 150 && hr !== 0) || state.includes("ALARM") || state === "异常体温预警") {
+                    statusEl.innerHTML = `<span class="text-rose-400 font-bold animate-pulse">状态预警：体征偏离正常阈值，${statusText}</span>`;
+                    showToast("生命体征预警", "爱宠心率或体温偏高，建议执行远程呼唤！", "error");
+                } else {
+                    statusEl.innerHTML = `<span class="text-emerald-400">守护链路同步正常：${statusText}</span>`;
+                }
+
+            } catch(e) {
+                console.error("解析数据包故障:", e);
+                logAction("纠错", "接收到异常格式遥测报文。");
+            }
+        }
+
+        // 更新 KPI 卡片的视觉状态
+        function updateKPIs(state, hr, temp, battery) {
+            const kpiState = document.getElementById('kpiState');
+            const stateIcon = document.getElementById('stateIcon');
+            const kpiTemp = document.getElementById('kpiTemp');
+            const kpiBattery = document.getElementById('kpiBattery');
+            const batteryIcon = document.getElementById('batteryIcon');
+
+            // 活跃姿态双语适配与视觉同步
+            if (state === "熟睡" || state === "Sleep") {
+                kpiState.innerText = "熟睡模式";
+                kpiState.className = "text-lg md:text-2xl font-bold mt-1 text-slate-400";
+                stateIcon.parentNode.className = "p-3 bg-slate-950/40 border border-slate-800 rounded-lg text-slate-400";
+                stateIcon.setAttribute('data-lucide', 'moon');
+            } else if (state === "快速奔跑" || state === "突击" || state === "奔跑" || state === "Running") {
+                kpiState.innerText = "快速奔跑";
+                kpiState.className = "text-lg md:text-2xl font-bold mt-1 text-cyan-400 animate-pulse";
+                stateIcon.parentNode.className = "p-3 bg-cyan-950/30 border border-cyan-800/30 rounded-lg text-cyan-400";
+                stateIcon.setAttribute('data-lucide', 'flame');
+            } else if (state === "异常体温预警" || state === "发烧异常" || state === "Panic" || state.includes("ALARM")) {
+                kpiState.innerText = "状态预警";
+                kpiState.className = "text-lg md:text-2xl font-bold mt-1 text-rose-500 animate-bounce";
+                stateIcon.parentNode.className = "p-3 bg-rose-950/40 border border-rose-800/30 rounded-lg text-rose-500";
+                stateIcon.setAttribute('data-lucide', 'alert-triangle');
+            } else { // 日常慢步 / Walking / Active
+                kpiState.innerText = "日常慢步";
+                kpiState.className = "text-lg md:text-2xl font-bold mt-1 text-emerald-400";
+                stateIcon.parentNode.className = "p-3 bg-emerald-950/30 border border-emerald-800/30 rounded-lg text-emerald-400";
+                stateIcon.setAttribute('data-lucide', 'footprints');
+            }
+            lucide.createIcons(); 
+
+            // 体温高亮
+            kpiTemp.innerText = `${temp.toFixed(1)} °C`;
+            if (temp > 39.5) {
+                kpiTemp.className = "text-lg md:text-2xl font-bold mt-1 text-rose-500";
+            } else if (temp < 37.5) {
+                kpiTemp.className = "text-lg md:text-2xl font-bold mt-1 text-sky-400";
+            } else {
+                kpiTemp.className = "text-lg md:text-2xl font-bold mt-1 text-amber-400";
+            }
+
+            // 电量状态
+            kpiBattery.innerText = `${battery} %`;
+            if (battery < 20) {
+                kpiBattery.className = "text-lg md:text-2xl font-bold mt-1 text-rose-500";
+                if(batteryIcon) {
+                    batteryIcon.className = "w-6 h-6 text-rose-500 animate-bounce";
+                    batteryIcon.setAttribute('data-lucide', 'battery-low');
+                }
+            } else {
+                kpiBattery.className = "text-lg md:text-2xl font-bold mt-1 text-pink-400";
+                if(batteryIcon) {
+                    batteryIcon.className = "w-6 h-6 text-pink-400";
+                    batteryIcon.setAttribute('data-lucide', 'battery');
+                }
+            }
+            lucide.createIcons();
+        }
+
+        // 行动日志控制
+        function logAction(type, info) {
+            const logBox = document.getElementById('actionLog');
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2, '0') + ":" + 
+                            String(now.getMinutes()).padStart(2, '0') + ":" + 
+                            String(now.getSeconds()).padStart(2, '0');
+            
+            let colorClass = "text-cyan-400";
+            if (type === "操作") colorClass = "text-amber-400";
+            if (type === "系统") colorClass = "text-emerald-400 font-bold";
+            if (type === "警告") colorClass = "text-rose-500 font-bold";
+            if (type === "纠错") colorClass = "text-pink-400";
+
+            logBox.innerHTML += `<br>[${timeStr}] <span class="${colorClass}">[${type}]</span> ${info}`;
+            logBox.scrollTop = logBox.scrollHeight; 
+        }
+
+        // ==========================================
+        // 模块 6：远程控制与召回指令
+        // ==========================================
+        function sendCommand(cmdCode, description) {
+            logAction("操作", `向智能项圈打包下发召回逻辑包... [CMD: ${cmdCode}]`);
+            
+            // 尝试通过活跃的 MQTT 信道广播控制报文
+            if (client && client.isConnected()) {
+                try {
+                    const payload = JSON.stringify({
+                        command: cmdCode,
+                        timestamp: Date.now(),
+                        operator: "HIT_Guardian_Center"
+                    });
+                    const message = new Paho.MQTT.Message(payload);
+                    message.destinationName = "HIT/PetControl";
+                    client.send(message);
+                    logAction("操作", `指令已安全发出，执行结果: ${description}`);
+                    showToast("远程控制触发", `设备执行中：${description}`, "success");
+                } catch (err) {
+                    logAction("纠错", `遥控包广播失败: ${err.message}`);
+                }
+            } else {
+                logAction("操作", `【无网仿真】未检测到公共中继，已对项圈执行本地召回虚拟反馈：${description}`);
+                showToast("本地召回响应", description, "info");
+            }
+        }
+
+        // ==========================================
+        // 模块 7：通用提示面板
+        // ==========================================
+        function showToast(title, message, type = "info") {
+            const toast = document.getElementById('customToast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIconDiv = document.getElementById('toastIcon');
+
+            toastTitle.innerText = title;
+            toastMsg.innerText = message;
+
+            if (type === "success") {
+                toast.className = "fixed bottom-6 right-6 z-[9999] p-4 bg-slate-900/95 border-l-4 border-emerald-500 rounded shadow-2xl flex items-start gap-3 max-w-sm transition-all duration-300";
+                toastIconDiv.className = "p-1.5 rounded bg-emerald-950 border border-emerald-800/40 text-emerald-400";
+                toastIconDiv.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i>`;
+            } else if (type === "error") {
+                toast.className = "fixed bottom-6 right-6 z-[9999] p-4 bg-slate-900/95 border-l-4 border-rose-500 rounded shadow-2xl flex items-start gap-3 max-w-sm transition-all duration-300";
+                toastIconDiv.className = "p-1.5 rounded bg-rose-950 border border-rose-800/40 text-rose-400";
+                toastIconDiv.innerHTML = `<i data-lucide="alert-octagon" class="w-5 h-5"></i>`;
+            } else {
+                toast.className = "fixed bottom-6 right-6 z-[9999] p-4 bg-slate-900/95 border-l-4 border-cyan-500 rounded shadow-2xl flex items-start gap-3 max-w-sm transition-all duration-300";
+                toastIconDiv.className = "p-1.5 rounded bg-cyan-950 border border-cyan-800/40 text-cyan-400";
+                toastIconDiv.innerHTML = `<i data-lucide="info" class="w-5 h-5"></i>`;
+            }
+            lucide.createIcons();
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 4000);
+        }
+
+        // ==========================================
+        // 模块 8：安全通讯 - 接入公共中继网络
+        // ==========================================
+        const isHttps = window.location.protocol === "https:";
+        // 恢复与老版本 index.html 100% 一致的 8083 自适应 SSL 通信策略
+        const mqttPort = 8083; 
+        const clientId = "Web_HIT_HQ_" + Math.random().toString(16).substr(2, 8);
+        const client = new Paho.MQTT.Client("broker-cn.emqx.io", mqttPort, clientId);
+
+        document.getElementById('secureChannelLabel').innerText = isHttps ? "MQTT / TLS 安全加密" : "MQTT / WS 基础中继";
+        document.getElementById('nodeLabel').innerText = `基站接入节点: broker-cn.emqx.io:${mqttPort}`;
+
+        client.onConnectionLost = function(responseObject) {
+            document.getElementById('statusIndicator').className = "relative inline-flex rounded-full h-2 w-2 bg-rose-500";
+            document.getElementById('statusBar').innerHTML = "<span class='text-rose-400 animate-pulse'>链路连通性衰减，3秒后自动重新连接...</span>";
+            logAction("纠错", "基站信号中断，失去与 EMQX 中继器握手。");
+            setTimeout(connectMQTT, 3000); 
+        };
+
+        client.onMessageArrived = function(message) {
+            try {
+                const payload = JSON.parse(message.payloadString);
+                
+                if (isDemoMode) {
+                    // 【演示模式下】：仅接收处理并展示来自本地/远程的仿真循环报文
+                    if (payload.isSimulator) {
+                        processIncomingTelemetry(payload);
+                    }
+                } else {
+                    // 【真实模式下】：强制过滤、无视一切仿真消息（避免MQTT回环回路污染），只处理真实的物理单片机消息
+                    if (!payload.isSimulator) {
+                        processIncomingTelemetry(payload);
+                    }
+                }
+            } catch(e) {
+                console.error("MQTT 解包异常", e);
+            }
+        };
+
+        function connectMQTT() {
+            logAction("操作", `正在握手通信基站 [broker-cn.emqx.io:${mqttPort}]，协议: ${isHttps ? "WSS (Secure)" : "WS"}`);
+            
+            client.connect({
+                onSuccess: function() {
+                    document.getElementById('statusIndicator').className = "relative inline-flex rounded-full h-2 w-2 bg-emerald-500 animate-ping";
+                    document.getElementById('statusBar').innerHTML = `<span class='text-emerald-400'>守护通道握手就绪 (${isHttps ? 'WSS 安全连接' : 'WS 连接'})，侦听频道: HIT/PetData...</span>`;
+                    client.subscribe("HIT/PetData");
+                    logAction("操作", `云控制台接入正常，生命体征监测就绪。`);
+                },
+                onFailure: function(err) {
+                    console.error("MQTT 连接失败:", err);
+                    document.getElementById('statusIndicator').className = "relative inline-flex rounded-full h-2 w-2 bg-rose-500";
+                    document.getElementById('statusBar').innerHTML = `<span class='text-rose-400'>通道建立失败: ${err.errorMessage || "超时"}，3秒后自动挂起重试...</span>`;
+                    logAction("纠错", `中继站连接挂起: ${err.errorMessage || "连接超时"}`);
+                    setTimeout(connectMQTT, 3000);
+                },
+                useSSL: isHttps,
+                timeout: 5,
+                keepAliveInterval: 30,
+                cleanSession: true
+            });
+        }
+
+        connectMQTT();
+
+
+        // ==========================================
+        // 模块 9：日常健康行为数据仿真器
+        // ==========================================
+        let simInterval = null;
+        let simLat = hitCoords[0];
+        let simLng = hitCoords[1];
+        let currentScenario = 'PATROL'; 
+
+        // 安全停用虚拟仿真
+        function stopSimulator() {
+            if (simInterval) {
+                clearInterval(simInterval);
+                simInterval = null;
+            }
+            const simLabel = document.getElementById('simulatorStatus');
+            if (simLabel) {
+                simLabel.className = "flex items-center gap-1.5 text-xs text-slate-500";
+                simLabel.innerHTML = `
+                    <span class="h-2 w-2 rounded-full bg-slate-500"></span>
+                    SIMULATOR STANDBY
+                `;
+            }
+        }
+
+        function triggerSimulatedScenario(scenario) {
+            // 【核心模式锁】：如处于真实模式，直接拦截虚拟仿真控制，引导切换
+            if (!isDemoMode) {
+                logAction("警告", "当前处于【真实硬件模式】，无法手动触发数据仿真。请先点击仿真器右上角，切入【仿真演示模式】！");
+                showToast("指令受限", "真实硬件模式已锁定仿真器，请先开启演示模式！", "error");
+                return;
+            }
+
+            currentScenario = scenario;
+            logAction("操作", `切换至遥测行为场景：${scenario}`);
+            
+            if (simInterval) clearInterval(simInterval);
+
+            // 高亮仿真运行指示器
+            const simLabel = document.getElementById('simulatorStatus');
+            if (simLabel) {
+                simLabel.className = "flex items-center gap-1.5 text-xs text-amber-500";
+                simLabel.innerHTML = `
+                    <span class="h-2 w-2 rounded-full bg-amber-500 animate-ping"></span>
+                    SIMULATOR ACTIVE (${scenario})
+                `;
+            }
+
+            simInterval = setInterval(() => {
+                let walkStep = 0.00015; 
+                let heartRate = 80;
+                let temperature = 38.4;
+                let batteryChange = -0.01;
+                let stateName = "日常慢步";
+
+                if (currentScenario === 'REST') {
+                    walkStep = 0.00001; 
+                    heartRate = 60 + Math.floor(Math.random() * 8);
+                    temperature = 37.8 + Math.random() * 0.4;
+                    stateName = "熟睡";
+                } else if (currentScenario === 'PATROL') {
+                    walkStep = 0.00012; 
+                    heartRate = 85 + Math.floor(Math.random() * 20);
+                    temperature = 38.3 + Math.random() * 0.5;
+                    stateName = "日常慢步";
+                } else if (currentScenario === 'CHARGE') {
+                    walkStep = 0.00045; 
+                    heartRate = 135 + Math.floor(Math.random() * 30);
+                    temperature = 39.1 + Math.random() * 0.8;
+                    stateName = "快速奔跑";
+                } else if (currentScenario === 'ALARM_FEVER') {
+                    walkStep = 0.0002;
+                    heartRate = 155 + Math.floor(Math.random() * 20); 
+                    temperature = 41.2 + Math.random() * 0.6; 
+                    stateName = "异常体温预警";
+                }
+
+                simLat += (Math.random() - 0.5) * walkStep;
+                simLng += (Math.random() - 0.5) * walkStep;
+
+                let currentKpiBattery = parseFloat(document.getElementById('kpiBattery').innerText);
+                let newBattery = Math.max(1, Math.round(currentKpiBattery + batteryChange));
+
+                const payload = {
+                    state: stateName,
+                    hr: heartRate,
+                    temp: parseFloat(temperature.toFixed(2)),
+                    lat: parseFloat(simLat.toFixed(6)),
+                    lng: parseFloat(simLng.toFixed(6)),
+                    battery: newBattery,
+                    isSimulator: true // 加上核心仿真防护印章，不与硬件信号冲突
+                };
+
+                processIncomingTelemetry(payload);
+                updateAIRecommendationsSilent(payload);
+
+                if (client && client.isConnected()) {
+                    try {
+                        const message = new Paho.MQTT.Message(JSON.stringify(payload));
+                        message.destinationName = "HIT/PetData";
+                        client.send(message);
+                    } catch(err) {}
+                }
+
+            }, 2000); 
+
+            showToast("仿真系统启动", `成功模拟场景: ${scenario}。`, "info");
+        }
+
+        window.onload = function() {
+            // 完美机制：默认不开启虚拟仿真，让系统处于 Live 真实监听状态
+            // 从而瞬间抓取物理单片机信号。如需仿真测试，用户可随时点击面板场景进行开启。
+            logAction("系统", "物联网安全控制链路就绪。系统已默认锁定【真实硬件监听】。");
+            refreshArchiveTableUI();
+        };
+
+        // ==========================================
+        // 模块 10：历史数据档案归档与复盘
+        // ==========================================
+        function archiveCurrentSession() {
+            if (routeCoordinates.length < 2) {
+                showToast("归档失败", "尚未产生有效的日常运动记录，暂无法生成档案。", "error");
+                return;
+            }
+
+            const hrData = telemetryChart.data.datasets[0].data;
+            const tempData = telemetryChart.data.datasets[1].data;
+            const avgHr = hrData.length ? Math.round(hrData.reduce((p, c) => p + c, 0) / hrData.length) : 80;
+            const maxTemp = tempData.length ? Math.max(...tempData) : 38.5;
+
+            const newMission = {
+                name: `运动归档_${new Date().toLocaleTimeString()}`,
+                avgHr: avgHr,
+                maxTemp: parseFloat(maxTemp.toFixed(1)),
+                distance: parseFloat(cumulativeDistance.toFixed(2)),
+                path: routeCoordinates.map(c => [c.lat, c.lng])
+            };
+
+            archivedMissions.unshift(newMission); 
+            refreshArchiveTableUI();
+            showToast("档案归档", `成功存储新健康档案: ${newMission.name}`, "success");
+            logAction("数据", `航线成功存入档案库，同步写入 ${routeCoordinates.length} 组高精体征信包。`);
+        }
+
+        function refreshArchiveTableUI() {
+            const tableBody = document.getElementById('missionArchiveTableBody');
+            tableBody.innerHTML = '';
+            archivedMissions.forEach((mission, index) => {
+                const isUserSaved = mission.name.startsWith("运动归档");
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-slate-800/30 transition-colors cursor-pointer" onclick="loadArchivedMission(${index})">
+                        <td class="p-2 ${isUserSaved ? 'text-cyan-300' : 'text-emerald-400'} font-bold">${mission.name}</td>
+                        <td class="p-2">${mission.avgHr} BPM</td>
+                        <td class="p-2">${mission.maxTemp} °C</td>
+                        <td class="p-2">${mission.distance.toFixed(1)} 米</td>
+                        <td class="p-2 text-cyan-400 hover:underline">复盘</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function loadArchivedMission(index) {
+            const mission = archivedMissions[index];
+            if (!mission) return;
+
+            // 关闭实时模拟
+            stopSimulator();
+
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+            }
+
+            const points = mission.path.map(p => new L.LatLng(p[0], p[1]));
+            routePolyline = L.polyline(points, {
+                color: '#f59e0b', 
+                weight: 4,
+                opacity: 0.9,
+                dashArray: 'none'
+            }).addTo(map);
+
+            const bounds = L.latLngBounds(points);
+            map.fitBounds(bounds, { padding: [30, 30] });
+
+            if(points.length) {
+                petMarker.setLatLng(points[0]);
+                petMarker.setPopupContent(`
+                    <div class="bg-slate-950 text-slate-100 p-2 rounded border border-amber-500/30 text-xs font-mono">
+                        <b class="text-amber-400">【体征档案离线复盘】</b><br>
+                        档案名称: ${mission.name}<br>
+                        平均心率: ${mission.avgHr} BPM<br>
+                        今日步频: ${mission.distance} 米
+                    </div>
+                `).openPopup();
+            }
+
+            telemetryChart.data.labels = points.map((_, i) => `T-${i * 5}s`);
+            telemetryChart.data.datasets[0].data = points.map((_, i) => mission.avgHr + (Math.sin(i) * 5));
+            telemetryChart.data.datasets[1].data = points.map((_, i) => mission.maxTemp - (i * 0.05));
+            telemetryChart.update();
+
+            document.getElementById('kpiState').innerText = "离线复盘";
+            document.getElementById('kpiState').className = "text-lg md:text-2xl font-bold mt-1 text-amber-400";
+            document.getElementById('kpiTemp').innerText = `${mission.maxTemp} °C`;
+            document.getElementById('kpiDistance').innerText = `${mission.distance} 米`;
+
+            logAction("数据", `已加载并重绘体征档案: '${mission.name}'，涵盖 [${points.length}点] 轨迹网络。`);
+            showToast("历史重绘完成", `正在重播历史健康档案: ${mission.name}`, "success");
+        }
+
+
+        // ==========================================
+        // 模块 11：AI 生物医学健康诊断逻辑
+        // ==========================================
+        function startBioScan() {
+            const overlay = document.getElementById('scanOverlay');
+            const progress = document.getElementById('scanProgress');
+            const scanText = document.getElementById('scanText');
+            
+            overlay.classList.remove('hidden');
+            progress.style.width = '0%';
+            
+            let percent = 0;
+            const interval = setInterval(() => {
+                percent += 10;
+                progress.style.width = `${percent}%`;
+                scanText.innerText = `AI HEALTH CHECK: 生命体征全谱扫描中 ${percent}%`;
+                
+                if (percent >= 100) {
+                    clearInterval(interval);
+                    overlay.classList.add('hidden');
+                    
+                    const currentHr = parseInt(telemetryChart.data.datasets[0].data.slice(-1)[0]) || 80;
+                    const currentTemp = parseFloat(telemetryChart.data.datasets[1].data.slice(-1)[0]) || 38.5;
+                    const payload = {
+                        state: document.getElementById('kpiState').innerText,
+                        hr: currentHr,
+                        temp: currentTemp
+                    };
+                    generateComplexDiagnosis(payload);
+                    showToast("智能生命诊断完毕", "已生成最新一期多维动态健康调理建议", "success");
+                }
+            }, 150);
+        }
+
+        function updateAIRecommendationsSilent(payload) {
+            const conc = document.getElementById('reportConclusion');
+            const head = document.getElementById('reportHeadline');
+            if(payload.temp > 40.0) {
+                head.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i> 生态异常健康评估: 异常高热预警`;
+                conc.innerHTML = `<span class="text-rose-400 font-bold">警告：爱宠处于高体温运行区（${payload.temp}°C）</span>，可能遭受热应激、强烈温差不适、或体表有炎症迹象。心率（${payload.hr}BPM）呈现应激加速反应。`;
+            } else if(payload.state === "快速奔跑" || payload.hr > 130 || payload.state === "Running") {
+                head.innerHTML = `<i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i> 生能运动状态评估: 心肺载荷激活`;
+                conc.innerHTML = `<span class="text-cyan-400 font-bold">体征提示：正处于高能心肺活跃区间。</span>基础血液携氧效率极高，肌体代谢水准进入燃脂与强化锻炼区间。`;
+            } else if(payload.state === "熟睡" || payload.hr < 70 || payload.state === "Sleep") {
+                head.innerHTML = `<i data-lucide="moon" class="w-4 h-4 text-slate-400"></i> 生物节律状态评估: 深度休眠修复`;
+                conc.innerHTML = `<span class="text-slate-400 font-bold">体征提示：处于深层肌肉生长与抗体自愈期。</span>新陈代谢率收敛至基础耗能，机体全面重启休整。`;
+            } else {
+                head.innerHTML = `<i data-lucide="heart" class="w-4 h-4 text-emerald-400"></i> 生命指标健康度评估: 指标完美`;
+                conc.innerHTML = `各项生理健康参数运行于黄金稳态区间。环境气温适应性优良，抗病阻抗指标饱满，非常适合进行长时间户外中强度慢跑。`;
+            }
+            lucide.createIcons();
+        }
+
+        function generateComplexDiagnosis(payload) {
+            const conc = document.getElementById('reportConclusion');
+            const head = document.getElementById('reportHeadline');
+            const sport = document.getElementById('sportAdvice');
+            const diet = document.getElementById('dietAdvice');
+            const temp = payload.temp;
+            const hr = payload.hr;
+
+            if (temp > 40.0) {
+                head.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500 animate-pulse"></i> 生物异常预警: 发热过载`;
+                conc.innerHTML = `<span class="text-rose-400 font-bold">【机体过载预警】检测到明显热应激或体温偏高</span><br>核心体温高达 ${temp}°C 伴随心率加速，宠物可能存在过热中暑或免疫炎症防御。`;
+                sport.innerHTML = `<span class="text-rose-400 font-bold">运动建议：</span>立刻中止任何快速奔跑拉练，强制将其转移至阴凉通风处休整。`;
+                diet.innerHTML = `<span class="text-rose-400 font-bold">调理配方：</span>鼓励并引导其适量饮用常温纯净水，物理冰敷足垫部位。若发热超1小时未见退去，建议在线一键报案或联系兽医。`;
+            } else if (hr > 130) {
+                head.innerHTML = `<i data-lucide="zap" class="w-4 h-4 text-cyan-400"></i> 运动监测评估: 高效能区间`;
+                conc.innerHTML = `<span class="text-cyan-400 font-bold">【运动负荷优良】肌肉效能正在全面重塑</span><br>心肺泵氧高效，骨骼肌泵处于扩张阶段，适合增强敏捷及耐力底座。`;
+                sport.innerHTML = `恢复方案：建议单次快跑负荷不超过25分钟。运动结束后用 5-10 分钟缓慢慢步随行帮助心率和体温降温。`;
+                diet.innerHTML = `营养补充：运动刚结束时不宜暴饮暴食。30分钟后建议补充不饱和脂肪酸（鱼油）及高蛋白质，促使肌肉纤维科学恢复。`;
+            } else if (hr < 70 && hr !== 0) {
+                head.innerHTML = `<i data-lucide="shield" class="w-4 h-4 text-slate-400"></i> 免疫监测评估: 黄金睡眠`;
+                conc.innerHTML = `<span class="text-slate-400 font-bold">【深度恢复期】生长激素加速分泌与自我免疫强化</span><br>各项指标降至最健康安静心率曲线，植物神经重构工作顺利。`;
+                sport.innerHTML = `深度安抚：保持环境幽暗、安静，避免高分贝噪音。深度睡眠是宠物保护软骨关节和心血管弹性免受损害的最佳期。`;
+                diet.innerHTML = `日常膳食：清晨或睡醒后，可投喂膳食纤维偏高、配比科学的无谷天然粗粮，帮助肠道免疫菌群健康。`;
+            } else {
+                head.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> 综合健康监护评估: 正常稳态`;
+                conc.innerHTML = `<span class="text-emerald-400 font-bold">【综合指标健康监测中】</span><br>心率数值处于标准侦听基线，守护系统实时跟进中。`;
+                sport.innerHTML = `训练建议：可执行 1.5小时 哈工大一校区自由漫步。搭配抛球捡回，训练其专注力并提高其对陌生环境的安全认知。`;
+                diet.innerHTML = `膳食调理：建议按照标定量投喂高纤维脱水鲜肉日粮，在水里加入适量电解质粉，使其维持黄金代谢水准。`;
+            }
+            lucide.createIcons();
+        }
+
+    </script>
+</body>
+</html>
