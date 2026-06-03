@@ -1,7 +1,10 @@
 import { defineConfig } from "vite";
 import { analyzePetHealth, loadLocalEnv, readJsonBody } from "./server/deepseek.js";
+import { requireAiRequestAllowed } from "./server/security.js";
 
 loadLocalEnv();
+
+const devHost = process.env.HOST || "127.0.0.1";
 
 export default defineConfig({
   base: process.env.GITHUB_PAGES === "true" ? "/smartcollar/" : "/",
@@ -15,6 +18,7 @@ export default defineConfig({
             return;
           }
           try {
+            requireAiRequestAllowed(req);
             const body = await readJsonBody(req);
             const result = await analyzePetHealth(body);
             res.statusCode = 200;
@@ -33,11 +37,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 900
   },
   server: {
-    host: "0.0.0.0",
+    host: devHost,
     port: 5173
   },
   preview: {
-    host: "0.0.0.0",
+    host: devHost,
     port: 4173
   }
 });

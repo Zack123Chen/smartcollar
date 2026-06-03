@@ -4,11 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { analyzePetHealth, loadLocalEnv, readJsonBody } from "./server/deepseek.js";
+import { isPathInsideDirectory, requireAiRequestAllowed } from "./server/security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = __dirname;
 const distDir = path.join(root, "dist");
 const port = Number(process.env.PORT || 8787);
+const host = process.env.HOST || "127.0.0.1";
 
 loadLocalEnv(root);
 
@@ -24,10 +26,18 @@ const mimeTypes = {
 };
 
 async function serveStatic(req, res) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const pathname = decodeURIComponent(url.pathname);
+  let pathname;
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400);
+    res.end("Bad Request");
+    return;
+  }
+
   const filePath = path.normalize(path.join(distDir, pathname === "/" ? "index.html" : pathname));
-  if (!filePath.startsWith(distDir)) {
+  if (!isPathInsideDirectory(distDir, filePath)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -49,6 +59,7 @@ async function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
   if (req.url === "/api/health-analysis" && req.method === "POST") {
     try {
+      requireAiRequestAllowed(req);
       const body = await readJsonBody(req);
       const result = await analyzePetHealth(body);
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
@@ -63,6 +74,6 @@ const server = http.createServer(async (req, res) => {
   await serveStatic(req, res);
 });
 
-server.listen(port, () => {
-  console.log(`CareGuard server listening on http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`CareGuard server listening on http://${host}:${port}`);
 });

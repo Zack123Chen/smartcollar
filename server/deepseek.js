@@ -46,7 +46,8 @@ function summarizeSamples(samples = []) {
     .slice(-20)
     .map(sample => {
       const time = sample.recordedAt || sample.timestamp || "";
-      return `${time} 状态=${sample.state}, 心率=${sample.hr}BPM, 体温=${sample.temp}°C, 电量=${sample.battery}%, GPS=${sample.hasGps ? `${sample.lng},${sample.lat}` : "无"}`;
+      const battery = sample.battery == null ? "未接入" : `${sample.battery}%`;
+      return `${time} 状态=${sample.state}, 心率=${sample.hr}BPM, 体温=${sample.temp}°C, 电量=${battery}, GPS=${sample.hasGps ? `${sample.lng},${sample.lat}` : "无"}`;
     })
     .join("\n");
 }

@@ -795,6 +795,15 @@
         // ==========================================
         // 模块 4：哈弗辛距离算法 (计算累计轨迹长度)
         // ==========================================
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         function computeDistance(lat1, lon1, lat2, lon2) {
             const R = 6371000; // 地球半径，单位：米
             const phi1 = lat1 * Math.PI / 180;
@@ -888,7 +897,7 @@
                     petMarker.setPopupContent(`
                         <div class="bg-slate-950 text-slate-100 p-2 rounded border border-cyan-500/30 text-xs font-mono">
                             <b class="text-cyan-400">生命体征: 小七 K9</b><br>
-                            活跃姿态: ${state}<br>
+                            活跃姿态: ${escapeHtml(state)}<br>
                             心跳频率: ${hr} BPM<br>
                             核心体温: ${temp} °C
                         </div>
@@ -914,7 +923,7 @@
 
                 // 状态栏与警报提示
                 const statusEl = document.getElementById('statusBar');
-                const statusText = `生命体征: ${state} | 心率: ${hr} BPM | 温度: ${temp} °C | GPS: [${lng.toFixed(5)}, ${lat.toFixed(5)}]`;
+                const statusText = `生命体征: ${escapeHtml(state)} | 心率: ${hr} BPM | 温度: ${temp} °C | GPS: [${lng.toFixed(5)}, ${lat.toFixed(5)}]`;
                 
                 if (temp > 40.0 || (hr > 150 && hr !== 0) || state.includes("ALARM") || state === "异常体温预警") {
                     statusEl.innerHTML = `<span class="text-rose-400 font-bold animate-pulse">状态预警：体征偏离正常阈值，${statusText}</span>`;
@@ -1003,7 +1012,7 @@
             if (type === "警告") colorClass = "text-rose-500 font-bold";
             if (type === "纠错") colorClass = "text-pink-400";
 
-            logBox.innerHTML += `<br>[${timeStr}] <span class="${colorClass}">[${type}]</span> ${info}`;
+            logBox.innerHTML += `<br>[${timeStr}] <span class="${colorClass}">[${type}]</span> ${escapeHtml(info)}`;
             logBox.scrollTop = logBox.scrollHeight; 
         }
 
@@ -1287,7 +1296,7 @@
                 const isUserSaved = mission.name.startsWith("运动归档");
                 tableBody.innerHTML += `
                     <tr class="hover:bg-slate-800/30 transition-colors cursor-pointer" onclick="loadArchivedMission(${index})">
-                        <td class="p-2 ${isUserSaved ? 'text-cyan-300' : 'text-emerald-400'} font-bold">${mission.name}</td>
+                        <td class="p-2 ${isUserSaved ? 'text-cyan-300' : 'text-emerald-400'} font-bold">${escapeHtml(mission.name)}</td>
                         <td class="p-2">${mission.avgHr} BPM</td>
                         <td class="p-2">${mission.maxTemp} °C</td>
                         <td class="p-2">${mission.distance.toFixed(1)} 米</td>
@@ -1324,7 +1333,7 @@
                 petMarker.setPopupContent(`
                     <div class="bg-slate-950 text-slate-100 p-2 rounded border border-amber-500/30 text-xs font-mono">
                         <b class="text-amber-400">【体征档案离线复盘】</b><br>
-                        档案名称: ${mission.name}<br>
+                        档案名称: ${escapeHtml(mission.name)}<br>
                         平均心率: ${mission.avgHr} BPM<br>
                         今日步频: ${mission.distance} 米
                     </div>

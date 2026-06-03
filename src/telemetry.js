@@ -123,7 +123,9 @@ export function normalizeTelemetryPayload(input) {
     state: normalizeState(firstDefined(payload.state, payload.status, payload.motion, payload.mode, payload.activity)),
     hr: hr ?? 80,
     temp: temp ?? 38.5,
-    battery: battery ?? 100,
+    // 硬件未上报电量时保持 null，由 UI 显示「未接入」，避免假的 100%
+    battery,
+    hasBattery: battery !== null,
     lat,
     lng,
     hasGps: lat !== null && lng !== null,

@@ -139,6 +139,19 @@ function setIconName(icon, name) {
             stopSimulator();
             renderSystemModeControls();
 
+            // 复位电量显示，避免把仿真残留的电量误当成真实硬件读数（硬件不上报电量）
+            const batteryEl = document.getElementById('kpiBattery');
+            if (batteryEl) {
+                batteryEl.innerText = "未接入";
+                batteryEl.className = "kpi-value battery-value";
+            }
+            const batteryIcon = document.getElementById('batteryIcon');
+            if (batteryIcon) {
+                setIconClass(batteryIcon, "h-5 w-5");
+                batteryIcon.setAttribute('data-lucide', 'battery-warning');
+                lucide.createIcons();
+            }
+
             logAction("系统", "已切换回【真实硬件模式】。控制台已切断仿真回路，纯净等待物理单片机报文。");
             showToast("系统模式切换", "已切入物理硬件直连。控制台开始全面监听物理项圈上报！", "success");
         }
@@ -432,6 +445,43 @@ function setIconName(icon, name) {
                 .trim();
         }
 
+        // 按标题把 AI 文本切成块（保留标题行本身），preamble 无标题时 normalizedTitle 为空
+        function splitAiIntoBlocks(text) {
+            const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+            const blocks = [];
+            let current = { normalizedTitle: "", lines: [] };
+
+            const pushCurrent = () => {
+                if (current.lines.length || current.normalizedTitle) blocks.push(current);
+            };
+
+            lines.forEach(rawLine => {
+                const line = rawLine.trim();
+                const markdownHeading = line.match(/^#{1,6}\s+(.+)$/);
+                const boldHeading = line.match(/^\*\*(.+?)\*\*[:：]?$/);
+                const rawTitle = markdownHeading?.[1] || boldHeading?.[1];
+                if (rawTitle) {
+                    pushCurrent();
+                    current = { normalizedTitle: normalizeAiHeading(rawTitle), lines: [rawLine] };
+                } else {
+                    current.lines.push(rawLine);
+                }
+            });
+
+            pushCurrent();
+            return blocks;
+        }
+
+        // 渲染大框时剔除已被单独拆到小框的段落，避免内容重复
+        function buildConclusionHtml(text, excludeTitles) {
+            const exclude = new Set(excludeTitles);
+            const kept = splitAiIntoBlocks(text)
+                .filter(block => !exclude.has(block.normalizedTitle))
+                .map(block => block.lines.join("\n"))
+                .join("\n");
+            return formatAiAnalysis(kept);
+        }
+
         function extractAiSections(text) {
             const sections = {};
             let currentTitle = "";
@@ -483,7 +533,7 @@ function setIconName(icon, name) {
         function getCurrentTelemetrySnapshot() {
             const currentHr = parseInt(telemetryChart.data.datasets[0].data.slice(-1)[0]) || 80;
             const currentTemp = parseFloat(telemetryChart.data.datasets[1].data.slice(-1)[0]) || 38.5;
-            const batteryText = document.getElementById('kpiBattery').innerText;
+            const parsedBattery = parseInt(document.getElementById('kpiBattery').innerText, 10);
             return lastTelemetrySnapshot || {
                 timestamp: Date.now(),
                 recordedAt: new Date().toISOString(),
@@ -493,7 +543,7 @@ function setIconName(icon, name) {
                 isAlarm: currentTemp > 40.0 || currentHr > 150,
                 hr: currentHr,
                 temp: currentTemp,
-                battery: parseInt(batteryText) || 100,
+                battery: Number.isNaN(parsedBattery) ? null : parsedBattery,
                 lat: petMarker.getLatLng().lat,
                 lng: petMarker.getLatLng().lng,
                 hasGps: true
@@ -557,7 +607,7 @@ function setIconName(icon, name) {
                     petMarker.setPopupContent(`
                         <div class="map-popup">
                             <b>生命体征: 小七 K9</b><br>
-                            活跃姿态: ${state}<br>
+                            活跃姿态: ${escapeHtml(state)}<br>
                             心跳频率: ${hr} BPM<br>
                             核心体温: ${temp} °C
                         </div>
@@ -583,7 +633,8 @@ function setIconName(icon, name) {
 
                 // 状态栏与警报提示
                 const statusEl = document.getElementById('statusBar');
-                const statusText = `生命体征: ${state} | 心率: ${hr} BPM | 温度: ${temp} °C | GPS: ${formatGpsLabel(telemetry)}`;
+                // state 可能来自公共 MQTT 话题的任意字符串，进 innerHTML 前必须转义防 XSS
+                const statusText = `生命体征: ${escapeHtml(state)} | 心率: ${hr} BPM | 温度: ${temp} °C | GPS: ${formatGpsLabel(telemetry)}`;
                 
                 if (isAlarm) {
                     statusEl.innerHTML = `<span class="status-error">状态预警：体征偏离正常阈值，${statusText}</span>`;
@@ -647,17 +698,26 @@ function setIconName(icon, name) {
                 kpiTemp.className = "kpi-value temp-normal";
             }
 
-            // 电量状态
-            kpiBattery.innerText = `${battery} %`;
-            if (battery < 20) {
+            // 电量状态（硬件未上报电量时显示「未接入」，不伪造数值）
+            const hasBattery = battery !== null && battery !== undefined && !Number.isNaN(battery);
+            if (!hasBattery) {
+                kpiBattery.innerText = "未接入";
+                kpiBattery.className = "kpi-value battery-value";
+                if (batteryIcon) {
+                    setIconClass(batteryIcon, "h-5 w-5");
+                    batteryIcon.setAttribute('data-lucide', 'battery-warning');
+                }
+            } else if (battery < 20) {
+                kpiBattery.innerText = `${battery} %`;
                 kpiBattery.className = "kpi-value battery-low";
-                if(batteryIcon) {
+                if (batteryIcon) {
                     setIconClass(batteryIcon, "h-5 w-5");
                     batteryIcon.setAttribute('data-lucide', 'battery-low');
                 }
             } else {
+                kpiBattery.innerText = `${battery} %`;
                 kpiBattery.className = "kpi-value battery-value";
-                if(batteryIcon) {
+                if (batteryIcon) {
                     setIconClass(batteryIcon, "h-5 w-5");
                     batteryIcon.setAttribute('data-lucide', 'battery');
                 }
@@ -679,8 +739,9 @@ function setIconName(icon, name) {
             if (type === "警告") colorClass = "log-warning";
             if (type === "纠错") colorClass = "log-error";
 
-            logBox.innerHTML += `<br>[${timeStr}] <span class="${colorClass}">[${type}]</span> ${info}`;
-            logBox.scrollTop = logBox.scrollHeight; 
+            // info 可能携带原始报文片段（解析失败时），转义后再写入 innerHTML
+            logBox.innerHTML += `<br>[${timeStr}] <span class="${colorClass}">[${type}]</span> ${escapeHtml(info)}`;
+            logBox.scrollTop = logBox.scrollHeight;
         }
 
         // ==========================================
@@ -821,7 +882,8 @@ function setIconName(icon, name) {
         let simInterval = null;
         let simLat = hitCoords[0];
         let simLng = hitCoords[1];
-        let currentScenario = 'PATROL'; 
+        let simBattery = 100;          // 仿真电量用浮点累计，避免每步取整后回弹
+        let currentScenario = 'PATROL';
 
         // 安全停用虚拟仿真
         function stopSimulator() {
@@ -861,39 +923,43 @@ function setIconName(icon, name) {
             }
 
             simInterval = setInterval(() => {
-                let walkStep = 0.00015; 
+                let walkStep = 0.00015;
                 let heartRate = 80;
                 let temperature = 38.4;
-                let batteryChange = -0.01;
+                let batteryDrain = 0.1;   // 每个 2s tick 的耗电量，按活动强度区分
                 let stateName = "日常慢步";
 
                 if (currentScenario === 'REST') {
-                    walkStep = 0.00001; 
+                    walkStep = 0.00001;
                     heartRate = 60 + Math.floor(Math.random() * 8);
                     temperature = 37.8 + Math.random() * 0.4;
+                    batteryDrain = 0.05;
                     stateName = "熟睡";
                 } else if (currentScenario === 'PATROL') {
-                    walkStep = 0.00012; 
+                    walkStep = 0.00012;
                     heartRate = 85 + Math.floor(Math.random() * 20);
                     temperature = 38.3 + Math.random() * 0.5;
+                    batteryDrain = 0.1;
                     stateName = "日常慢步";
                 } else if (currentScenario === 'CHARGE') {
-                    walkStep = 0.00045; 
+                    walkStep = 0.00045;
                     heartRate = 135 + Math.floor(Math.random() * 30);
                     temperature = 39.1 + Math.random() * 0.8;
+                    batteryDrain = 0.25;
                     stateName = "快速奔跑";
                 } else if (currentScenario === 'ALARM_FEVER') {
                     walkStep = 0.0002;
-                    heartRate = 155 + Math.floor(Math.random() * 20); 
-                    temperature = 41.2 + Math.random() * 0.6; 
+                    heartRate = 155 + Math.floor(Math.random() * 20);
+                    temperature = 41.2 + Math.random() * 0.6;
+                    batteryDrain = 0.2;
                     stateName = "异常体温预警";
                 }
 
                 simLat += (Math.random() - 0.5) * walkStep;
                 simLng += (Math.random() - 0.5) * walkStep;
 
-                let currentKpiBattery = parseFloat(document.getElementById('kpiBattery').innerText);
-                let newBattery = Math.max(1, Math.round(currentKpiBattery + batteryChange));
+                // 浮点累计耗电，最低保留 1%，显示时再取整
+                simBattery = Math.max(1, simBattery - batteryDrain);
 
                 const payload = {
                     state: stateName,
@@ -901,7 +967,7 @@ function setIconName(icon, name) {
                     temp: parseFloat(temperature.toFixed(2)),
                     lat: parseFloat(simLat.toFixed(6)),
                     lng: parseFloat(simLng.toFixed(6)),
-                    battery: newBattery,
+                    battery: Math.round(simBattery),
                     isSimulator: true // 加上核心仿真防护印章，不与硬件信号冲突
                 };
 
@@ -976,7 +1042,7 @@ function setIconName(icon, name) {
             archivedMissions.forEach((mission, index) => {
                 tableBody.innerHTML += `
                     <tr onclick="loadArchivedMission(${index})">
-                        <td>${mission.name}</td>
+                        <td>${escapeHtml(mission.name)}</td>
                         <td>${mission.avgHr} BPM</td>
                         <td>${mission.maxTemp} °C</td>
                         <td>${mission.distance.toFixed(1)} 米</td>
@@ -1032,7 +1098,7 @@ function setIconName(icon, name) {
                 petMarker.setPopupContent(`
                     <div class="map-popup">
                         <b>体征档案离线复盘</b><br>
-                        档案名称: ${mission.name}<br>
+                        档案名称: ${escapeHtml(mission.name)}<br>
                         平均心率: ${mission.avgHr} BPM<br>
                         今日步频: ${mission.distance} 米
                     </div>
@@ -1122,7 +1188,11 @@ function setIconName(icon, name) {
 
             head.innerHTML = `<i data-lucide="sparkles" class="h-4 w-4"></i> AI 健康分析: ${escapeHtml(model)}`;
             conc.className = "ai-analysis-text";
-            conc.innerHTML = formatAiAnalysis(analysis);
+            // 大框只渲染未被下方小框单独拆出的段落，避免「行动建议/饮水饮食」重复出现
+            conc.innerHTML = buildConclusionHtml(analysis, [
+                "行动建议", "活动建议",
+                "饮水饮食", "饮水饮食建议", "饮食建议"
+            ]);
 
             const sections = extractAiSections(analysis);
             sport.innerText = summarizeAiSection(
