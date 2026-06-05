@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="宠爱云护 CareGuard Live 智能宠物项圈实时监测与寻宠控制台" />
+    <title>宠爱云护 CareGuard Live</title>
+    <script type="module" crossorigin src="/smartcollar/assets/index-CHbZdtDh.js"></script>
+    <link rel="stylesheet" crossorigin href="/smartcollar/assets/index-C1XQnmag.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark">
+            <i data-lucide="shield" class="h-5 w-5"></i>
+          </div>
+          <div>
+            <h1>宠爱云护</h1>
+            <p>CareGuard Live</p>
+          </div>
+        </div>
+
+        <div class="system-pills">
+          <span class="pill">
+            <i data-lucide="calendar-days" class="h-3.5 w-3.5"></i>
+            <span id="starDate">SD-2026.06.02</span>
+          </span>
+          <span class="pill pill-online">
+            <span id="statusIndicator" class="status-dot"></span>
+            ONLINE
+          </span>
+          <span class="pill">
+            <i data-lucide="radio-tower" class="h-3.5 w-3.5"></i>
+            <span id="secureChannelLabel">MQTT / WS</span>
+          </span>
+        </div>
+      </header>
+
+      <section class="kpi-grid" aria-label="实时状态">
+        <article class="kpi-card">
+          <div>
+            <p class="eyebrow">状态</p>
+            <p class="kpi-value state-running" id="kpiState">数据初始化中</p>
+          </div>
+          <div class="icon-tile state-icon-wrap">
+            <i data-lucide="activity" class="h-5 w-5" id="stateIcon"></i>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div>
+            <p class="eyebrow">体温</p>
+            <p class="kpi-value temp-normal" id="kpiTemp">38.5 °C</p>
+          </div>
+          <div class="icon-tile">
+            <i data-lucide="thermometer" class="h-5 w-5"></i>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div>
+            <p class="eyebrow">里程</p>
+            <p class="kpi-value distance-value" id="kpiDistance">0.00 米</p>
+          </div>
+          <div class="icon-tile">
+            <i data-lucide="navigation-2" class="h-5 w-5"></i>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div>
+            <p class="eyebrow">电量</p>
+            <p class="kpi-value battery-value" id="kpiBattery">未接入</p>
+          </div>
+          <div class="icon-tile">
+            <i data-lucide="battery" class="h-5 w-5" id="batteryIcon"></i>
+          </div>
+        </article>
+      </section>
+
+      <main class="workspace-grid">
+        <section class="panel map-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">位置</p>
+              <h2>实时寻宠地图</h2>
+            </div>
+            <button class="ghost-button danger" onclick="clearHistoryPath()">
+              <i data-lucide="eraser" class="h-4 w-4"></i>
+              清除轨迹
+            </button>
+          </div>
+          <div id="map" class="map-surface radar-map"></div>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">体征</p>
+              <h2>心率与体温</h2>
+            </div>
+            <span class="soft-label">实时</span>
+          </div>
+          <div class="chart-surface">
+            <canvas id="telemetryChart"></canvas>
+          </div>
+        </section>
+
+        <section class="panel control-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">控制</p>
+              <h2>项圈操作</h2>
+            </div>
+            <button class="ghost-button" onclick="archiveCurrentSession()">
+              <i data-lucide="archive" class="h-4 w-4"></i>
+              归档
+            </button>
+          </div>
+
+          <div class="action-grid">
+            <button class="action-button" onclick="sendCommand('BEEP', '发送远程召回蜂鸣声音频信号')">
+              <i data-lucide="bell-ring" class="h-5 w-5"></i>
+              <span>召回哨音</span>
+            </button>
+            <button class="action-button" onclick="sendCommand('LIGHT_ON', '开启项圈LED夜间寻宠高亮指示灯')">
+              <i data-lucide="eye" class="h-5 w-5"></i>
+              <span>寻宠闪光</span>
+            </button>
+            <button class="action-button" onclick="sendCommand('ECO_MODE', '切换项圈至智能低功耗省电采集模式')">
+              <i data-lucide="battery-charging" class="h-5 w-5"></i>
+              <span>省电模式</span>
+            </button>
+          </div>
+
+          <div id="actionLog" class="log-box">
+            [11:34:59] 控制台载入成功...<br />
+            [11:35:00] 传感器同步校验完毕...
+          </div>
+        </section>
+
+        <section class="panel simulator-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">模拟</p>
+              <h2>数据仿真</h2>
+            </div>
+            <button id="modeToggleBtn" class="mode-button" onclick="toggleSystemMode()" title="切换真实硬件监听与本地仿真">
+              <i id="modeToggleIcon" data-lucide="radio" class="h-4 w-4"></i>
+              <span id="modeToggleText">真实硬件</span>
+            </button>
+          </div>
+
+          <div id="simulatorStatus" class="sim-status">
+            <span class="sim-dot"></span>
+            SIMULATOR STANDBY
+          </div>
+
+          <div class="scenario-grid">
+            <button onclick="triggerSimulatedScenario('REST')">
+              <i data-lucide="moon" class="h-4 w-4"></i>
+              熟睡
+            </button>
+            <button onclick="triggerSimulatedScenario('PATROL')">
+              <i data-lucide="footprints" class="h-4 w-4"></i>
+              慢步
+            </button>
+            <button onclick="triggerSimulatedScenario('CHARGE')">
+              <i data-lucide="flame" class="h-4 w-4"></i>
+              奔跑
+            </button>
+            <button onclick="triggerSimulatedScenario('ALARM_FEVER')">
+              <i data-lucide="alert-triangle" class="h-4 w-4"></i>
+              预警
+            </button>
+          </div>
+
+          <button class="mini-alert-button" onclick="sendMiniProgramAlarm()">
+            <i data-lucide="bell-ring" class="h-4 w-4"></i>
+            推送小程序报警
+          </button>
+        </section>
+
+        <section class="panel archive-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">档案</p>
+              <h2>运动复盘</h2>
+            </div>
+            <div class="panel-actions">
+              <span class="soft-label">已存 <span id="storedTelemetryCount">0</span> 条</span>
+              <button class="ghost-button" onclick="exportStoredDataFile()">
+                <i data-lucide="download" class="h-4 w-4"></i>
+                导出
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>档案</th>
+                  <th>心率</th>
+                  <th>体温</th>
+                  <th>路程</th>
+                  <th>回放</th>
+                </tr>
+              </thead>
+              <tbody id="missionArchiveTableBody">
+                <tr onclick="loadArchivedMission(0)">
+                  <td>晨间草坪快跑</td>
+                  <td>124 BPM</td>
+                  <td>39.2 °C</td>
+                  <td>842.10 米</td>
+                  <td><button class="text-link">复盘</button></td>
+                </tr>
+                <tr onclick="loadArchivedMission(1)">
+                  <td>图书馆周边慢行</td>
+                  <td>82 BPM</td>
+                  <td>38.4 °C</td>
+                  <td>350.50 米</td>
+                  <td><button class="text-link">复盘</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel health-panel">
+          <div id="scanOverlay" class="scan-overlay is-hidden">
+            <div class="scan-card">
+              <i data-lucide="scan-face" class="h-8 w-8"></i>
+              <span id="scanText">AI HEALTH CHECK: 生命体征扫描中 0%</span>
+              <div class="scan-track">
+                <div id="scanProgress"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">健康</p>
+              <h2>智能评估</h2>
+            </div>
+            <button class="primary-button" onclick="startBioScan()">
+              <i data-lucide="sparkles" class="h-4 w-4"></i>
+              AI 分析
+            </button>
+          </div>
+
+          <div id="diagnosticReport" class="diagnostic-report">
+            <div class="diagnostic-main">
+              <h3 id="reportHeadline">
+                <i data-lucide="info" class="h-4 w-4"></i>
+                生理机能健康度评估: 慢行适中
+              </h3>
+              <div id="reportConclusion">心率和核心温度处于健康基准线，日常自主运动水平正常。</div>
+            </div>
+            <div class="advice-grid">
+              <div>
+                <span>活动建议</span>
+                <p id="sportAdvice">当前阶段心肺适应度良好，可维持适度户外互动。</p>
+              </div>
+              <div>
+                <span>饮水饮食</span>
+                <p id="dietAdvice">建议定时补充清洁温水，维持稳定代谢。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="status-footer">
+        <span id="statusBar">物联网云端接收就绪，等待监听中...</span>
+        <span id="nodeLabel">broker-cn.emqx.io</span>
+      </footer>
+    </div>
+
+    <div id="customToast" class="toast translate-y-20 opacity-0">
+      <div id="toastIcon" class="toast-icon">
+        <i data-lucide="info" class="h-5 w-5"></i>
+      </div>
+      <div>
+        <h4 id="toastTitle">系统通知</h4>
+        <p id="toastMessage">通知内容。</p>
+      </div>
+    </div>
+
+  </body>
+</html>
