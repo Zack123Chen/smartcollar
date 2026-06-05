@@ -1,6 +1,7 @@
 node_modules/
 WeChatMiniProgram/node_modules/
 WeChatMiniProgram/miniprogram_npm/
+WeChatMiniProgram/project.private.config.json
 dist/
 .vite/
 .env

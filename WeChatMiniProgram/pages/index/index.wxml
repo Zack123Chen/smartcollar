@@ -1,21 +1,23 @@
 <view class="page">
   <view class="hero">
-    <view>
-      <text class="eyebrow">CareGuard Mini</text>
+    <view class="hero-copy">
+      <view class="meta-row">
+        <text class="eyebrow">CareGuard Mini</text>
+        <text class="status {{statusClass}}">{{statusLabel}}</text>
+      </view>
       <view class="title-row">
         <text class="title">宠爱云护</text>
-        <text class="status {{connected ? 'status-ok' : 'status-wait'}}">{{statusLabel}}</text>
       </view>
     </view>
     <button class="icon-button" bindtap="connectBroker" disabled="{{connected || connecting}}">
-      {{connected ? '在线' : '连接'}}
+      {{connectButtonLabel}}
     </button>
   </view>
 
   <view wx:if="{{alarmActive}}" class="alarm-card">
     <view class="alarm-head">
       <text>生命体征预警</text>
-      <button class="quiet-button" bindtap="toggleMute">{{alarmMuted ? '取消静音' : '静音'}}</button>
+      <button class="quiet-button" bindtap="toggleMute">{{alarmMuteLabel}}</button>
     </view>
     <text class="alarm-text">{{alertMessage}}</text>
     <view class="alarm-metrics">
@@ -27,7 +29,7 @@
   <view class="metric-grid">
     <view class="metric-card">
       <text class="metric-label">状态</text>
-      <text class="metric-value {{alarmActive ? 'danger' : ''}}">{{telemetry.displayState}}</text>
+      <text class="metric-value {{alarmMetricClass}}">{{telemetry.displayState}}</text>
     </view>
     <view class="metric-card">
       <text class="metric-label">心率</text>
@@ -35,7 +37,7 @@
     </view>
     <view class="metric-card">
       <text class="metric-label">体温</text>
-      <text class="metric-value {{telemetry.temp > 40 ? 'danger' : ''}}">{{telemetry.temp}} °C</text>
+      <text class="metric-value {{tempMetricClass}}">{{telemetry.temp}} °C</text>
     </view>
     <view class="metric-card">
       <text class="metric-label">电量</text>
@@ -48,6 +50,13 @@
       <text>定位与数据</text>
       <text class="soft">已存 {{historyCount}} 条</text>
     </view>
+    <map
+      class="location-map"
+      latitude="{{telemetry.lat}}"
+      longitude="{{telemetry.lng}}"
+      markers="{{mapMarkers}}"
+      scale="16"
+    />
     <view class="coord-row">
       <text>GPS</text>
       <text>{{telemetry.lng}}, {{telemetry.lat}}</text>
@@ -67,10 +76,10 @@
       <text>远程控制</text>
       <text class="soft">同步 Web 前端</text>
     </view>
-    <view class="control-grid">
+    <view class="control-list">
       <button wx:for="{{controls}}" wx:key="code" class="control-button" data-code="{{item.code}}" data-desc="{{item.desc}}" bindtap="sendCommand">
         <text>{{item.label}}</text>
-        <text>{{item.code}}</text>
+        <text>{{item.desc}}</text>
       </button>
     </view>
   </view>
@@ -78,10 +87,10 @@
   <view class="panel">
     <view class="panel-head">
       <text>事件日志</text>
-      <text class="soft">最近 8 条</text>
+      <text class="soft">最近 6 条</text>
     </view>
     <view class="log-list">
-      <view wx:for="{{logs}}" wx:key="time" class="log-row">
+      <view wx:for="{{logs}}" wx:key="id" class="log-row">
         <text class="log-time">{{item.time}}</text>
         <text class="log-type">{{item.type}}</text>
         <text class="log-text">{{item.text}}</text>

@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  padding: 28rpx;
+  padding: 24rpx;
   box-sizing: border-box;
   background: #f6f6f4;
 }
@@ -19,8 +19,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20rpx;
-  padding: 28rpx;
+  gap: 24rpx;
+  padding: 30rpx;
+}
+
+.hero-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
 }
 
 .eyebrow,
@@ -28,27 +40,29 @@
 .metric-label,
 .log-time {
   color: #6b6f76;
-  font-size: 23rpx;
+  font-size: 22rpx;
 }
 
 .title-row {
   display: flex;
   align-items: center;
-  gap: 14rpx;
-  margin-top: 8rpx;
+  margin-top: 10rpx;
 }
 
 .title {
   color: #1f2328;
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .status {
-  padding: 6rpx 14rpx;
+  flex: none;
+  padding: 5rpx 13rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
+  font-size: 21rpx;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .status-ok {
@@ -70,13 +84,21 @@
   margin: 0;
   border-radius: 14rpx;
   font-weight: 650;
+  box-sizing: border-box;
+}
+
+.icon-button::after,
+.quiet-button::after,
+.control-button::after {
+  border: none;
 }
 
 .icon-button {
-  min-width: 116rpx;
-  min-height: 68rpx;
+  width: 184rpx;
+  min-height: 72rpx;
   color: #fff;
   background: #1f2328;
+  font-size: 27rpx;
 }
 
 .alarm-card {
@@ -129,12 +151,14 @@
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
-  margin-top: 20rpx;
+  gap: 14rpx;
+  margin-top: 18rpx;
 }
 
 .metric-card {
-  padding: 22rpx;
+  min-height: 116rpx;
+  padding: 22rpx 24rpx;
+  box-sizing: border-box;
 }
 
 .metric-label {
@@ -143,10 +167,11 @@
 
 .metric-value {
   display: block;
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   color: #1f2328;
-  font-size: 32rpx;
+  font-size: 31rpx;
   font-weight: 750;
+  line-height: 1.12;
 }
 
 .danger {
@@ -154,8 +179,8 @@
 }
 
 .panel {
-  margin-top: 20rpx;
-  padding: 24rpx;
+  margin-top: 18rpx;
+  padding: 24rpx 26rpx;
 }
 
 .panel-head {
@@ -171,9 +196,9 @@
   display: flex;
   justify-content: space-between;
   gap: 18rpx;
-  margin-top: 18rpx;
+  margin-top: 16rpx;
   color: #6b6f76;
-  font-size: 25rpx;
+  font-size: 24rpx;
 }
 
 .coord-row text:first-child {
@@ -181,42 +206,65 @@
   font-weight: 650;
 }
 
-.control-grid {
+.location-map {
+  display: block;
+  width: 100%;
+  height: 260rpx;
+  margin-top: 20rpx;
+  border-radius: 14rpx;
+  overflow: hidden;
+  background: #ece9e2;
+}
+
+.control-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
+  gap: 10rpx;
   margin-top: 18rpx;
+  width: 100%;
+  overflow: hidden;
 }
 
 .control-button {
-  min-height: 120rpx;
-  padding: 14rpx 8rpx;
+  width: 100%;
+  min-width: 0;
+  min-height: 88rpx;
+  padding: 14rpx 18rpx;
+  align-items: flex-start;
   flex-direction: column;
-  gap: 8rpx;
   color: #1f2328;
   background: #faf9f7;
   border: 1rpx solid #e4e1dc;
   font-size: 24rpx;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.control-button text:first-child {
+  font-weight: 700;
 }
 
 .control-button text:last-child {
+  display: block;
+  margin-top: 6rpx;
   color: #6b6f76;
-  font-size: 20rpx;
+  font-size: 21rpx;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .log-list {
   display: grid;
-  gap: 12rpx;
+  gap: 10rpx;
   margin-top: 18rpx;
 }
 
 .log-row {
   display: grid;
-  grid-template-columns: 94rpx 70rpx 1fr;
-  gap: 10rpx;
+  grid-template-columns: 88rpx 62rpx minmax(0, 1fr);
+  gap: 8rpx;
   align-items: start;
   color: #6b6f76;
-  font-size: 23rpx;
+  font-size: 22rpx;
   line-height: 1.45;
 }
 

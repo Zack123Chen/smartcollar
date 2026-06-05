@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { analyzePetHealth, loadLocalEnv, readJsonBody } from "./server/deepseek.js";
+import { handleMiniRelay } from "./server/miniRelay.js";
+import { handleAlertNotification } from "./server/notify.js";
 import { isPathInsideDirectory, requireAiRequestAllowed } from "./server/security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +59,32 @@ async function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (req.url === "/api/mini-relay" && req.method === "POST") {
+    try {
+      requireAiRequestAllowed(req);
+      const result = await handleMiniRelay(req);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(error.statusCode || 500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: error.message || "Mini program relay failed" }));
+    }
+    return;
+  }
+
+  if (req.url === "/api/alert-notify" && req.method === "POST") {
+    try {
+      requireAiRequestAllowed(req);
+      const result = await handleAlertNotification(req);
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(error.statusCode || 500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: error.message || "Alert notification failed" }));
+    }
+    return;
+  }
+
   if (req.url === "/api/health-analysis" && req.method === "POST") {
     try {
       requireAiRequestAllowed(req);

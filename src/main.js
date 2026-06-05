@@ -38,6 +38,7 @@ function setIconName(icon, name) {
         let alarmActive = false;
         let telemetrySaveCount = 0;
         let lastTelemetrySnapshot = null;
+        let lastMiniRelayAt = 0;
         let aiAnalysisLockedUntil = 0;
         let bioScanRunning = false;
         const petProfile = {
@@ -563,6 +564,7 @@ function setIconName(icon, name) {
                 const record = buildTelemetryRecord(telemetry, displayState, isAlarm);
                 lastTelemetrySnapshot = record;
                 persistTelemetryRecord(record);
+                relayMiniProgramTelemetry(record, isAlarm);
 
                 // 更新 KPI 卡片
                 updateKPIs(displayState, hr, temp, battery);
@@ -798,6 +800,8 @@ function setIconName(icon, name) {
 
             processIncomingTelemetry({ ...alertPayload, isSimulator: true });
             updateAIRecommendationsSilent(alertPayload);
+            relayMiniProgramTelemetry(alertPayload, true, { immediate: true });
+            sendServiceAlertNotification(alertPayload);
 
             if (client && client.isConnected()) {
                 try {
@@ -821,6 +825,54 @@ function setIconName(icon, name) {
             } else {
                 logAction("纠错", "MQTT 尚未连接，无法向微信小程序推送报警。");
                 showToast("推送等待", "MQTT 尚未连接，稍后再试。", "error");
+            }
+        }
+
+        async function sendServiceAlertNotification(alertPayload) {
+            try {
+                const response = await fetch("/api/alert-notify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        ...alertPayload,
+                        petName: "小七"
+                    })
+                });
+
+                if (!response.ok) {
+                    const body = await response.json().catch(() => ({}));
+                    throw new Error(body.error || `HTTP ${response.status}`);
+                }
+
+                logAction("警告", "已触发方糖/Server酱服务号报警通知。");
+            } catch (error) {
+                logAction("纠错", `服务号通知未发送: ${error.message}`);
+            }
+        }
+
+        async function relayMiniProgramTelemetry(payload, isAlarm = false, options = {}) {
+            const now = Date.now();
+            if (!options.immediate && !isAlarm && now - lastMiniRelayAt < 3000) return;
+            lastMiniRelayAt = now;
+
+            try {
+                const response = await fetch("/api/mini-relay", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        ...payload,
+                        alert: isAlarm || payload.alert,
+                        isAlarm: isAlarm || payload.isAlarm,
+                        timestamp: payload.timestamp || now
+                    })
+                });
+
+                if (!response.ok) {
+                    const body = await response.json().catch(() => ({}));
+                    throw new Error(body.error || `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                logAction("纠错", `小程序云端同步未完成: ${error.message}`);
             }
         }
 
