@@ -58,6 +58,7 @@ Fronter/
 ├── server.mjs              # 生产静态服务 + AI 分析接口
 ├── server/
 │   └── deepseek.js         # DeepSeek 后端代理，不向前端暴露密钥
+├── WeChatMiniProgram/      # 微信小程序端，订阅 Web 仿真报警与遥测数据
 ├── src/
 │   ├── main.js             # 地图、图表、MQTT、仿真与交互主逻辑
 │   ├── storage.js          # IndexedDB 本地遥测与档案存储
@@ -90,6 +91,21 @@ GitHub Pages 发布地址：`https://zack123chen.github.io/smartcollar/`
 
 > 注意：GitHub Pages 只托管静态前端，AI 健康分析的 DeepSeek 后端代理需要在本地 `npm run dev` 或 `npm run serve` 下运行。
 
+## WeChat Mini Program
+
+小程序目录：`WeChatMiniProgram/`
+
+导入微信开发者工具后，先安装依赖：
+
+```bash
+cd WeChatMiniProgram
+npm install
+```
+
+然后在微信开发者工具里执行“工具 -> 构建 npm”。
+
+Web 前端的“模拟 -> 推送小程序报警”按钮会向 `HIT/PetAlert` 发布报警消息，并同步写入 `HIT/PetData`。小程序收到后会震动、弹窗，并保持预警状态直到收到正常体征数据。
+
 ## Local Storage
 
 应用会把实时遥测样本与运动档案写入浏览器 IndexedDB：
@@ -118,8 +134,10 @@ DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
 默认监听 EMQX 公共中继：
 
 - Telemetry topic: `HIT/PetData`
+- Alert topic: `HIT/PetAlert`
 - Control topic: `HIT/PetControl`
-- Broker: `broker-cn.emqx.io:8083`
+- Web broker: `broker-cn.emqx.io:8083`（HTTP）/ `broker-cn.emqx.io:8084`（HTTPS/WSS）
+- 小程序 broker: `wxs://broker-cn.emqx.io:8084/mqtt`
 
 仿真演示模式会给本地虚拟数据包添加 `isSimulator: true` 标记，真实硬件模式会过滤仿真报文，避免展示数据污染硬件联调。
 

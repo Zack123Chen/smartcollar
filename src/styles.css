@@ -288,6 +288,7 @@ button {
 
 .action-button,
 .scenario-grid button,
+.mini-alert-button,
 .ghost-button,
 .primary-button,
 .mode-button {
@@ -312,11 +313,20 @@ button {
 
 .action-button:hover,
 .scenario-grid button:hover,
+.mini-alert-button:hover,
 .ghost-button:hover,
 .mode-button:hover {
   background: #fff;
   border-color: var(--line-strong);
   transform: translateY(-1px);
+}
+
+.mini-alert-button {
+  width: 100%;
+  margin-top: 8px;
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: rgba(179, 66, 66, 0.28);
 }
 
 .primary-button {

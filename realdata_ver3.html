@@ -1084,8 +1084,8 @@
         // 模块 8：安全通讯 - 接入公共中继网络
         // ==========================================
         const isHttps = window.location.protocol === "https:";
-        // 恢复与老版本 index.html 100% 一致的 8083 自适应 SSL 通信策略
-        const mqttPort = 8083; 
+        // EMQX 公共 broker: 8083 是明文 WS，8084 是 WSS；HTTPS 页面必须走 8084。
+        const mqttPort = isHttps ? 8084 : 8083;
         const clientId = "Web_HIT_HQ_" + Math.random().toString(16).substr(2, 8);
         const client = new Paho.MQTT.Client("broker-cn.emqx.io", mqttPort, clientId);
 

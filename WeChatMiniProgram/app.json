@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "宠爱云护",
+    "navigationBarBackgroundColor": "#f6f6f4",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f6f6f4",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

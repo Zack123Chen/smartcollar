@@ -772,6 +772,58 @@ function setIconName(icon, name) {
             }
         }
 
+        function sendMiniProgramAlarm() {
+            const current = getCurrentTelemetrySnapshot();
+            const alertPayload = {
+                event: "MINI_PROGRAM_ALARM",
+                alert: true,
+                isAlarm: true,
+                source: "web-simulator",
+                state: "异常体温预警",
+                displayState: "状态预警",
+                hr: Math.max(current.hr || 0, 168),
+                temp: Math.max(current.temp || 0, 41.3),
+                battery: current.battery || 92,
+                lat: current.lat,
+                lng: current.lng,
+                hasGps: current.hasGps !== false,
+                message: "Web 仿真端触发小程序报警，请立即查看宠物生命体征。",
+                timestamp: Date.now(),
+                recordedAt: new Date().toISOString()
+            };
+
+            if (!isDemoMode) {
+                enterDemoMode({ source: "scenario" });
+            }
+
+            processIncomingTelemetry({ ...alertPayload, isSimulator: true });
+            updateAIRecommendationsSilent(alertPayload);
+
+            if (client && client.isConnected()) {
+                try {
+                    const alertMessage = new Paho.MQTT.Message(JSON.stringify(alertPayload));
+                    alertMessage.destinationName = "HIT/PetAlert";
+                    client.send(alertMessage);
+
+                    const telemetryMessage = new Paho.MQTT.Message(JSON.stringify({
+                        ...alertPayload,
+                        isSimulator: true
+                    }));
+                    telemetryMessage.destinationName = "HIT/PetData";
+                    client.send(telemetryMessage);
+
+                    logAction("警告", "已向 HIT/PetAlert 推送小程序报警，并同步写入遥测主题。");
+                    showToast("小程序报警已发送", "微信小程序收到后会保持预警，直到体征恢复正常。", "error");
+                } catch (err) {
+                    logAction("纠错", `小程序报警推送失败: ${err.message}`);
+                    showToast("推送失败", "MQTT 报警消息发送失败，请检查中继连接。", "error");
+                }
+            } else {
+                logAction("纠错", "MQTT 尚未连接，无法向微信小程序推送报警。");
+                showToast("推送等待", "MQTT 尚未连接，稍后再试。", "error");
+            }
+        }
+
         // ==========================================
         // 模块 7：通用提示面板
         // ==========================================
@@ -812,8 +864,8 @@ function setIconName(icon, name) {
         // 模块 8：安全通讯 - 接入公共中继网络
         // ==========================================
         const isHttps = window.location.protocol === "https:";
-        // 恢复与老版本 index.html 100% 一致的 8083 自适应 SSL 通信策略
-        const mqttPort = 8083; 
+        // EMQX 公共 broker: 8083 是明文 WS，8084 是 WSS；HTTPS 页面必须走 8084。
+        const mqttPort = isHttps ? 8084 : 8083;
         const clientId = "Web_HIT_HQ_" + Math.random().toString(16).substr(2, 8);
         const client = new Paho.MQTT.Client("broker-cn.emqx.io", mqttPort, clientId);
 
@@ -1268,6 +1320,7 @@ Object.assign(window, {
   exportStoredDataFile,
   loadArchivedMission,
   sendCommand,
+  sendMiniProgramAlarm,
   startBioScan,
   toggleSystemMode,
   triggerSimulatedScenario

@@ -1,4 +1,6 @@
 node_modules/
+WeChatMiniProgram/node_modules/
+WeChatMiniProgram/miniprogram_npm/
 dist/
 .vite/
 .env
