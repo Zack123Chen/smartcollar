@@ -13,8 +13,8 @@ export function normalizeMiniRelayPayload(body = {}) {
   const timestamp = Number(body.timestamp || Date.now());
   const hr = pickNumber(body.hr ?? body.heartRate ?? body.bpm, 0);
   const temp = pickNumber(body.temp ?? body.temperature, 0);
-  const lat = pickNumber(body.lat ?? body.latitude, 45.751167);
-  const lng = pickNumber(body.lng ?? body.lon ?? body.longitude, 126.629339);
+  const lat = pickNumber(body.lat ?? body.latitude, 45.750516);
+  const lng = pickNumber(body.lng ?? body.lon ?? body.longitude, 126.628947);
   const state = String(body.state || body.displayState || "等待数据");
   const isAlarm = Boolean(
     pickBoolean(body.isAlarm) ||
