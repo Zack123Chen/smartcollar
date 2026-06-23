@@ -25,14 +25,14 @@ test("accepts longitude aliases and nested location objects", () => {
     bodyTemp: 39.2,
     activity: "running",
     location: {
-      latitude: 45.7460,
-      longitude: 126.6209
+      latitude: 45.7411,
+      longitude: 126.6255
     }
   });
 
   assert.equal(telemetry.state, "快速奔跑");
   assert.equal(telemetry.hasGps, true);
-  assert.equal(formatGpsLabel(telemetry), "[126.62090, 45.74600]");
+  assert.equal(formatGpsLabel(telemetry), "[126.62550, 45.74110]");
 });
 
 test("parses key-value telemetry text from MCU logs", () => {

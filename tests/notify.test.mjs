@@ -10,8 +10,8 @@ test("alert notification includes vital signs and GPS", () => {
     hr: 168,
     temp: 41.3,
     battery: 92,
-    lat: 45.744112,
-    lng: 126.627215,
+    lat: 45.7411,
+    lng: 126.6255,
     message: "Web 仿真端触发小程序报警"
   });
 
@@ -19,7 +19,7 @@ test("alert notification includes vital signs and GPS", () => {
   assert.match(notification.desp, /异常体温预警/);
   assert.match(notification.desp, /168 BPM/);
   assert.match(notification.desp, /41.3 °C/);
-  assert.match(notification.desp, /126.627215, 45.744112/);
+  assert.match(notification.desp, /126.6255, 45.7411/);
 });
 
 test("alert notification falls back when optional fields are absent", () => {

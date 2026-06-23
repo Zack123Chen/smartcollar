@@ -2,8 +2,8 @@ const mqtt = require("../../utils/mqtt-lite");
 
 const app = getApp();
 const HISTORY_KEY = "careguard.telemetry.history";
-const DEFAULT_LAT = 45.744112;
-const DEFAULT_LNG = 126.627215;
+const DEFAULT_LAT = 45.74303224082512;
+const DEFAULT_LNG = 126.6314330493297;
 
 function clampHistory(history) {
   return history.slice(-60);

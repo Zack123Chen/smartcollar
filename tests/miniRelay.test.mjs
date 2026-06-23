@@ -9,8 +9,8 @@ test("mini relay normalizes alert payload for CloudBase", () => {
     hr: 168,
     temp: 41.3,
     battery: 92,
-    latitude: 45.744112,
-    longitude: 126.627215,
+    latitude: 45.7411,
+    longitude: 126.6255,
     source: "web-simulator"
   });
 
@@ -18,8 +18,9 @@ test("mini relay normalizes alert payload for CloudBase", () => {
   assert.equal(payload.displayState, "状态预警");
   assert.equal(payload.hr, 168);
   assert.equal(payload.temp, 41.3);
-  assert.equal(payload.lat, 45.744112);
-  assert.equal(payload.lng, 126.627215);
+  assert.equal(payload.lat, 45.74303224082512);
+  assert.equal(payload.lng, 126.6314330493297);
+  assert.equal(payload.coordinateSystem, "gcj02");
   assert.equal(payload.source, "web-simulator");
 });
 
